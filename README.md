@@ -1,12 +1,12 @@
->>>>📦 Cardboard Logistics System (Logistics/Warehouse Module)<<<<
+----📦 Cardboard Logistics System (Logistics/Warehouse Module)----
 This application represents one of four interconnected modules that form a complete, fully operational enterprise system. The small applications communicate with each other primarily through a central database, exchanging and retrieving information in real-time.
 
 The system is designed to simulate a corporate information program focused on managing cardboard order fulfillment.
 
->>>>Application Role and Target Users<<<<
+----Application Role and Target Users----
 This specific module is designated for Logisticians and Warehouse Staff. Its primary function is to manage the flow of finished goods from the production stage to final shipment.
 
->>>>Core Functionality<<<<
+----Core Functionality----
 The application enables users to perform the following critical logistics and inventory tasks:
 
 - Receive Completed Production Orders: Logisticians process and formally accept finished cardboard orders from the production department, moving the items into designated warehouse stock.
