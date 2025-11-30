@@ -5,12 +5,13 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.GroupLayout;
 import javax.swing.border.Border;
-import javax.swing.text.JTextComponent;
 import java.sql.Connection; // IMPORT
 import java.sql.PreparedStatement; // IMPORT
 import java.sql.ResultSet; // IMPORT
 import java.sql.SQLException; // IMPORT
 import java.util.Arrays; // IMPORT
+import javax.swing.JPasswordField; // IMPORT
+import javax.swing.text.JTextComponent; // IMPORT do metody createInputField
 
 /**
  *
@@ -57,7 +58,7 @@ public class RightPanel extends javax.swing.JPanel {
     private javax.swing.JPanel loginFieldPanel;
     private javax.swing.JPanel passwordFieldPanel;
     private javax.swing.JTextField jTextField1;
-    // ZMIANA: Zmieniono z JTextField na JPasswordField
+    // ZMIANA 1: Zmieniono z JTextField na JPasswordField
     private javax.swing.JPasswordField jPasswordField2;
     private javax.swing.JPanel statusPanel;
 
@@ -67,7 +68,7 @@ public class RightPanel extends javax.swing.JPanel {
     // --- METODA: Ustawianie połączenia z bazy danych ---
     public void setDbConnection(Connection conn) {
         this.dbConnection = conn;
-        // Opcjonalnie: Zaktualizuj statusPanel na podstawie stanu połączenia
+        // Opcjonalnie: zaktualizuj statusPanel, jeśli chcesz
         if (conn == null) {
             System.out.println("Błąd: Connection jest null.");
         }
@@ -87,7 +88,7 @@ public class RightPanel extends javax.swing.JPanel {
         Color activeTextColor = Color.BLACK;
 
         jTextField1.setForeground(defaultTextColor);
-        // ZMIANA: Obsługa JPasswordField
+        // ZMIANA 2: Obsługa JPasswordField
         jPasswordField2.setForeground(defaultTextColor);
 
         // --- Listener dla Nazwy użytkownika (jTextField1) ---
@@ -113,9 +114,10 @@ public class RightPanel extends javax.swing.JPanel {
         jPasswordField2.addFocusListener(new java.awt.event.FocusAdapter() {
             @Override
             public void focusGained(java.awt.event.FocusEvent evt) {
-                // ZMIANA: Użycie getPassword() i porównanie ze stringiem "Hasło" jest ryzykowne,
-                // ale konieczne dla obsługi placeholderów w JPasswordField
-                if (Arrays.equals(jPasswordField2.getPassword(), "Hasło".toCharArray())) {
+                // Konwersja hasła do stringa dla porównania z placeholderem
+                String passwordText = new String(jPasswordField2.getPassword());
+
+                if (passwordText.equals("Hasło")) {
                     jPasswordField2.setText("");
                     jPasswordField2.setForeground(activeTextColor);
                     jPasswordField2.setEchoChar('*'); // Pokaż gwiazdki dla hasła
@@ -134,7 +136,7 @@ public class RightPanel extends javax.swing.JPanel {
     }
 
     // Metoda pomocnicza do tworzenia panelu z ikoną (imitacja pola tekstowego)
-    // ZMIANA: Obsługuje teraz JPasswordField, jeśli jest przekazany
+    // ZMIANA 3: Akceptuje JTextComponent (JTextField lub JPasswordField)
     private JPanel createInputField(String placeholder, String iconPath, JTextComponent textField) {
         JPanel panel = new JPanel(new BorderLayout(10, 0));
         panel.setBackground(Color.WHITE);
@@ -177,10 +179,10 @@ public class RightPanel extends javax.swing.JPanel {
 
         // Tworzenie pól tekstowych
         jTextField1 = new JTextField("Nazwa użytkownika");
-        // ZMIANA: Użycie JPasswordField
+        // ZMIANA 4: Użycie JPasswordField
         jPasswordField2 = new JPasswordField("Hasło");
 
-        // Użycie account.png i lock.png
+        // Użycie account.png i lock.png (argumenty muszą być dostosowane)
         loginFieldPanel = createInputField("Nazwa użytkownika", "account.png", jTextField1);
         passwordFieldPanel = createInputField("Hasło", "lock.png", jPasswordField2);
 
@@ -219,7 +221,7 @@ public class RightPanel extends javax.swing.JPanel {
         // Ustawienie marginesów tekstu wewnątrz przycisku
         jButton1.setBorder(BorderFactory.createEmptyBorder(10, 25, 10, 25));
 
-        // NOWOŚĆ: Dodanie Akcji do Przycisku
+        // ZMIANA 5: Dodanie Akcji do Przycisku
         jButton1.addActionListener(this::jButton1ActionPerformed);
 
 
@@ -322,10 +324,11 @@ public class RightPanel extends javax.swing.JPanel {
         );
     }
 
-    // --- NOWA METODA: Obsługa akcji logowania ---
+    // ZMIANA 6: Nowa metoda logiki logowania
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {
-        // Pomiń walidację, jeśli wyświetlany jest placeholder
-        if (jTextField1.getText().equals("Nazwa użytkownika") || jPasswordField2.getPassword().length == 0) {
+        // Walidacja pól placeholdera
+        // Sprawdzamy czy username to placeholder LUB czy hasło to placeholder LUB czy pole hasła jest puste
+        if (jTextField1.getText().equals("Nazwa użytkownika") || new String(jPasswordField2.getPassword()).equals("Hasło") || jPasswordField2.getPassword().length == 0) {
             JOptionPane.showMessageDialog(this,
                     "Proszę podać nazwę użytkownika i hasło.",
                     "Błąd Logowania",
@@ -333,12 +336,20 @@ public class RightPanel extends javax.swing.JPanel {
             return;
         }
 
+        // Sprawdzenie, czy połączenie z bazą jest dostępne
+        if (dbConnection == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Brak aktywnego połączenia z bazą danych. Sprawdź plik Main.java.",
+                    "Błąd Logowania",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
         String username = jTextField1.getText();
         String password = new String(jPasswordField2.getPassword());
 
-        // Kwerytorium SQL: Używamy PreparedStatement, aby uniknąć SQL Injection
-        // Sprawdzamy, czy istnieje użytkownik o danym loginie, haśle ORAZ rola jest jedną z dozwolonych
-        String sql = "SELECT role FROM users_workers WHERE username = ? AND password = ? AND role IN ('magazyn', 'admin')";
+        // Zapytanie SELECT pobierające 'role' ORAZ 'full_name'
+        String sql = "SELECT role, full_name FROM users_workers WHERE username = ? AND password = ? AND role IN ('magazyn', 'admin')";
 
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
 
@@ -350,6 +361,7 @@ public class RightPanel extends javax.swing.JPanel {
             if (rs.next()) {
                 // Zalogowano pomyślnie
                 String role = rs.getString("role");
+                String fullName = rs.getString("full_name");
 
                 // 1. Ukrycie bieżącego okna logowania (MyFrame)
                 JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
@@ -357,25 +369,25 @@ public class RightPanel extends javax.swing.JPanel {
 
                 // 2. Wyświetlenie nowego okna MainFrame
                 SwingUtilities.invokeLater(() -> {
-                    MainFrame mainFrame = new MainFrame(username, role);
+                    // Przekazujemy Connection dbConnection, fullName, role i username
+                    MainFrame mainFrame = new MainFrame(username, role, fullName, dbConnection);
                     mainFrame.setVisible(true);
                 });
 
             } else {
-                // Błędny login/hasło lub niedozwolona rola
+                // Błędny login/hasło, lub nieprawidłowa rola (np. 'produkcja' zamiast 'magazyn')
                 JOptionPane.showMessageDialog(this,
-                        "Błędna nazwa użytkownika, hasło lub brak uprawnień",
+                        "Błędna nazwa użytkownika, hasło lub brak uprawnień (dozwolone: magazyn/admin).",
                         "Błąd Logowania",
                         JOptionPane.ERROR_MESSAGE);
             }
 
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this,
-                    "Błąd bazy danych: " + e.getMessage(),
+                    "Błąd zapytania do bazy danych: " + e.getMessage(),
                     "Błąd Logowania",
                     JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
     }
-    // ----------------------------------------------------
 }
