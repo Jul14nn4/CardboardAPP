@@ -4,6 +4,9 @@ import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.data.general.DefaultPieDataset;
+import org.jfree.chart.plot.PiePlot;
+import org.jfree.ui.HorizontalAlignment;
+import org.jfree.chart.plot.PieLabelLinkStyle;
 
 import java.awt.*;
 import java.sql.Connection;
@@ -17,20 +20,18 @@ import javax.swing.SwingConstants;
 public class OrderPieChartPanel extends JPanel {
 
     private final Connection dbConnection;
-    private final String chartTitle = "Status Zleceń (Podział na etapy)";
+    private final String chartTitle = "Status Zleceń";
 
     public OrderPieChartPanel(Connection conn) {
         this.dbConnection = conn;
         setLayout(new BorderLayout());
 
-        // Dodanie wykresu do panelu w konstruktorze
         JPanel chartComponent = createChartPanel();
         add(chartComponent, BorderLayout.CENTER);
     }
 
     /**
      * Główna metoda tworząca panel z wykresem.
-     * @return JPanel zawierający wykres lub komunikat błędu.
      */
     private JPanel createChartPanel() {
         if (dbConnection == null) {
@@ -43,7 +44,7 @@ public class OrderPieChartPanel extends JPanel {
             return createErrorPanel("Brak aktywnych danych o etapach zleceń.");
         }
 
-        // Utworzenie obiektu wykresu JFreeChart
+        // 1. Utworzenie obiektu wykresu JFreeChart
         JFreeChart chart = ChartFactory.createPieChart(
                 chartTitle,
                 dataset,
@@ -52,28 +53,37 @@ public class OrderPieChartPanel extends JPanel {
                 false             // Bez URL
         );
 
-        // Dostosowanie wyglądu
+        // 2. DOSTOSOWANIE: Wizualne i zapobieganie łamaniu słów
+
+        PiePlot plot = (PiePlot) chart.getPlot();
+
+        // Opcje kontrolujące łamanie tekstu w etykietach
+        chart.getLegend().setHorizontalAlignment(HorizontalAlignment.LEFT);
+        plot.setLabelLinkStyle(PieLabelLinkStyle.STANDARD); // Włączenie standardowego mechanizmu łamania
+        plot.setLabelFont(new Font("Arial", Font.PLAIN, 10));
+        plot.setLabelLinkMargin(0.1);
+
+        // Ustawienia wizualne
         chart.setBackgroundPaint(Color.white);
         chart.getPlot().setBackgroundPaint(Color.white);
         chart.getTitle().setFont(new Font("Arial", Font.BOLD, 14));
 
-        // Utworzenie i zwrócenie ChartPanelu (komponent Swing osadzający wykres)
+        // 3. Utworzenie ChartPanelu
         ChartPanel chartPanel = new ChartPanel(chart);
-        // ZWIĘKSZONA SZEROKOŚĆ I WYSOKOŚĆ OKNA WYKRESU
-        chartPanel.setPreferredSize(new Dimension(450, 300));
+        // ZWIĘKSZONA SZEROKOŚĆ OKNA WYKRESU (600 x 300)
+        chartPanel.setPreferredSize(new Dimension(600, 300));
 
         return chartPanel;
     }
 
     /**
      * Pobiera dane z bazy danych dla wykresu kołowego.
-     * @return Zbiór danych DefaultPieDataset.
      */
     private DefaultPieDataset fetchChartData() {
         DefaultPieDataset dataset = new DefaultPieDataset();
 
-        // ZMIANA W ZAPYTANIU SQL: Usunięto 'Zakończone' z klauzuli NOT IN.
-        // Zlecenia z etapem 'Zakończone' będą teraz widoczne na wykresie.
+        // Zapytanie SQL zlicza i grupuje zlecenia wg etapu (stage).
+        // Wykluczono tylko 'Anulowane' (status 'Zakończone' jest teraz widoczny).
         String sql = "SELECT stage, COUNT(*) AS count FROM orders WHERE stage IS NOT NULL AND stage NOT IN ('Anulowane') GROUP BY stage ORDER BY count DESC";
 
         try (Statement stmt = dbConnection.createStatement();
@@ -82,7 +92,6 @@ public class OrderPieChartPanel extends JPanel {
             while (rs.next()) {
                 String stageName = rs.getString("stage");
                 int count = rs.getInt("count");
-                // Dodajemy dane do Dataset: Etykieta (Nazwa etapu + liczba) oraz wartość
                 dataset.setValue(stageName + " (" + count + ")", count);
             }
 
