@@ -6,34 +6,45 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 public class Main {
-    public static void main(String[] args) { // Usunięto rzucanie wyjątku SQLException
+
+    // ZMIANA: FLAGA DEBUGOWANIA
+    private static final boolean SKIP_LOGIN = false;
+
+    public static void main(String[] args) {
 
         String url = "jdbc:mysql://130.61.37.178:3306/projekt";
         String user = "project";
         String pass = "ZAQ!2wsx";
 
+        Connection conn = null;
+
         try {
-            Connection conn = DriverManager.getConnection(url, user, pass);
+            conn = DriverManager.getConnection(url, user, pass);
             if(conn != null) {
-                System.out.println("Połączono!");
-            }
-            else {
-                System.out.println("Brak połączenia");
-                JOptionPane.showMessageDialog(null, "Nie udało się połączyć z bazą danych.", "Błąd Krytyczny", JOptionPane.ERROR_MESSAGE);
-                return; // Zakończ, jeśli nie ma połączenia
+                System.out.println("Połączono z bazą.");
             }
 
-            // --- Uruchomienie GUI ---
-            Connection finalConn = conn; // Potrzebne dla lambda
+            Connection finalConn = conn;
+
             SwingUtilities.invokeLater(() -> {
-                MyFrame frame = new MyFrame();
 
-                // Kluczowy krok: Ustawienie połączenia w RightPanel
-                if (frame.rightPanel instanceof RightPanel) {
-                    ((RightPanel) frame.rightPanel).setDbConnection(finalConn);
+                if (SKIP_LOGIN) {
+                    // --- ŚCIEŻKA DEBUGOWANIA (OMINIĘCIE LOGOWANIA) ---
+                    String testUser = "testLogistyk";
+                    String testRole = "magazyn";
+                    String testFullName = "Testowy Logistyk";
+
+                    MainFrame mainFrame = new MainFrame(testUser, testRole, testFullName, finalConn);
+                    mainFrame.setVisible(true);
+
+                } else {
+                    // --- ŚCIEŻKA PRODUKCYJNA (EKRAN LOGOWANIA) ---
+                    MyFrame frame = new MyFrame();
+                    if (frame.rightPanel != null) {
+                        frame.rightPanel.setDbConnection(finalConn);
+                    }
+                    frame.setVisible(true);
                 }
-
-                frame.setVisible(true);
             });
 
         } catch (SQLException e) {

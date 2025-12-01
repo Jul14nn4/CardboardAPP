@@ -3,9 +3,11 @@
 import javax.swing.*;
 import java.awt.*;
 import java.sql.Connection;
+import java.sql.PreparedStatement; // Import potrzebny do zapytań SQL
+import java.sql.ResultSet;       // Import potrzebny do wyników SQL
+import java.sql.SQLException;    // Import potrzebny do obsługi błędów SQL
 import java.util.HashMap;
 import java.util.Map;
-// Importy dla logiki SQL będą w osobnym module
 
 public class MainFrame extends JFrame {
 
@@ -14,7 +16,6 @@ public class MainFrame extends JFrame {
     private final String role;
     private final String fullName;
 
-    // ZMIANA: Dodano argument Connection i fullName
     public MainFrame(String username, String role, String fullName, Connection conn) {
         this.dbConnection = conn;
         this.username = username;
@@ -68,35 +69,98 @@ public class MainFrame extends JFrame {
         return button;
     }
 
+    // ----------------------------------------------------------------------
+    // NOWA METODA: Pobiera liczbę zleceń gotowych do przyjęcia (stage = 'Gotowe do magazynu')
+    // ----------------------------------------------------------------------
+    private int fetchReadyOrdersCount() {
+        if (dbConnection == null) {
+            System.err.println("Błąd: Obiekt połączenia z bazą danych jest null.");
+            return 0;
+        }
+
+        // Zapytanie SQL zliczające zlecenia, które ukończyły produkcję i czekają na przyjęcie przez logistykę
+        String sql = "SELECT COUNT(*) FROM orders WHERE stage = 'W magazynie'";
+
+        try (PreparedStatement pstmt = dbConnection.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            if (rs.next()) {
+                return rs.getInt(1); // Zwraca wartość z pierwszej kolumny (COUNT(*))
+            }
+
+        } catch (SQLException e) {
+            System.err.println("Błąd pobierania liczby gotowych zleceń: " + e.getMessage());
+        }
+        return 0;
+    }
+    // ----------------------------------------------------------------------
+
+
+    // --- Metoda tworząca Główny Panel Dashboardu ---
+    // MainFrame.java (Modyfikacja metody createDashboardPanel)
+
+    // --- Metoda tworząca Główny Panel Dashboardu ---
     // --- Metoda tworząca Główny Panel Dashboardu ---
     private JPanel createDashboardPanel() {
+        // Główny kontener Dashboardu
         JPanel dashboard = new JPanel(new BorderLayout(10, 10));
         dashboard.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         dashboard.setBackground(new Color(240, 240, 240));
 
-        // Tytuł
-        JLabel title = new JLabel("Witaj, " + fullName );
-        title.setFont(new Font("Arial", Font.BOLD, 24));
-        dashboard.add(title, BorderLayout.NORTH);
+        // 1. Nagłówek (Witaj, Imię i Nazwisko)
+        // Zakładamy, że ta metoda zwraca panel z JLabel "Witaj, [fullName] ([role])"
+        JPanel headerPanel = createHeaderPanel();
+        dashboard.add(headerPanel, BorderLayout.NORTH);
 
-        // Siatka dla Kluczowych Wskaźników i Diagramu
+        // Wrapper dla sekcji środkowej (Wskaźniki + Wykres + Lista Akcji)
+        JPanel centerWrapper = new JPanel(new BorderLayout(10, 10));
+        centerWrapper.setBackground(new Color(240, 240, 240));
+
+        // 2. Siatka dla Kluczowych Wskaźników i Diagramu (Górny rząd)
         JPanel topPanel = new JPanel(new GridLayout(1, 3, 15, 15));
+        topPanel.setBackground(new Color(240, 240, 240));
 
-        // A. DIAGRAM KOŁOWY (Zlicza statusy z orders)
-        JPanel chartPanel = createChartPlaceholder("Raport Statusów Zleceń (Stage)", dbConnection);
+        // Pobranie faktycznej liczby z bazy (metoda musi istnieć w MainFrame)
+        int readyOrdersCount = fetchReadyOrdersCount();
+
+        // A. DIAGRAM KOŁOWY
+        // Użycie nowej, dedykowanej klasy OrderPieChartPanel.java
+        JPanel chartPanel = new OrderPieChartPanel(dbConnection);
         topPanel.add(chartPanel);
 
-        // B. Kluczowe Wskaźniki (Przykład)
-        topPanel.add(createMetricPanel("Zlecenia gotowe do przyjęcia", "25", new Color(255, 100, 100)));
+        // B. Kluczowe Wskaźniki
+        // Zlecenia gotowe do przyjęcia (liczba z bazy)
+        topPanel.add(createMetricPanel("Zlecenia gotowe do przyjęcia", String.valueOf(readyOrdersCount), new Color(255, 100, 100)));
+        // Zlecenia do wysyłki dzisiaj (przykład stałej wartości)
         topPanel.add(createMetricPanel("Zlecenia do wysyłki dzisiaj", "5", new Color(100, 255, 100)));
 
-        dashboard.add(topPanel, BorderLayout.CENTER); // Zmieniono na Center, aby lista Akcji była na dole
+        centerWrapper.add(topPanel, BorderLayout.NORTH); // Wskaźniki i Diagram na górze
 
-        // C. Lista Oczekujących Akcji
+        // 3. Lista Oczekujących Akcji (Tabela)
         JScrollPane actionList = createActionList();
-        dashboard.add(actionList, BorderLayout.SOUTH);
+        centerWrapper.add(actionList, BorderLayout.CENTER); // Akcje pod wskaźnikami
+
+        // Dodanie wrapper'a do głównego panelu dashboardu
+        dashboard.add(centerWrapper, BorderLayout.CENTER);
 
         return dashboard;
+    }
+
+    // MainFrame.java (Dodaj do klasy MainFrame)
+
+    // --- Metoda tworząca nagłówek z powitaniem ---
+    private JPanel createHeaderPanel() {
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(new Color(240, 240, 240)); // To samo tło co dashboard
+
+        // Tytuł - Witaj, [Imię i Nazwisko]
+        JLabel title = new JLabel("Witaj, " + fullName);
+        title.setFont(new Font("Arial", Font.BOLD, 24));
+        title.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0)); // Dodaj mały margines dolny
+
+        header.add(title, BorderLayout.NORTH);
+
+        return header;
     }
 
     // --- Metody pomocnicze dla dashboardu ---
