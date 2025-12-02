@@ -1,14 +1,12 @@
 // MainFrame.java
 
 import javax.swing.*;
+import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.sql.Connection;
-import java.sql.PreparedStatement; // do zapytań SQL
-import java.sql.ResultSet;       // do wyników SQL
-import java.sql.SQLException;    // do obsługi błędów SQL
-import java.time.LocalDate;
-import java.util.HashMap;
-import java.util.Map;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 
 public class MainFrame extends JFrame {
 
@@ -16,6 +14,15 @@ public class MainFrame extends JFrame {
     private final String username;
     private final String role;
     private final String fullName;
+    private final Color MAIN_COLOR = new Color(87, 50, 135); //97\
+    Color ALT_ROW_COLOR = new Color(212, 191, 255);
+
+    private final JPanel contentPanel;
+    private final CardLayout cardLayout = new CardLayout();
+
+    // Stałe identyfikatory dla widoków
+    private static final String DASHBOARD_VIEW = "DASHBOARD_VIEW";
+    private static final String ACCEPTANCE_VIEW = "ACCEPTANCE_VIEW";
 
     public MainFrame(String username, String role, String fullName, Connection conn) {
         this.dbConnection = conn;
@@ -31,58 +38,59 @@ public class MainFrame extends JFrame {
         // główny BorderLayout
         setLayout(new BorderLayout());
 
+        // MainFrame.java (Fragment konstruktora)
+
         // 1. Lewy sidebar
         JPanel sideBar = createSideBar();
         add(sideBar, BorderLayout.WEST);
 
-        // 2. Dashboard
-        JPanel mainContent = createDashboardPanel();
-        add(mainContent, BorderLayout.CENTER);
+        // 2. Dashboard - NOWA IMPLEMENTACJA Z CARDLAYOUT
+        contentPanel = new JPanel(cardLayout);
+        add(contentPanel, BorderLayout.CENTER);
+
+        // Dodanie widoków do CardLayout
+        contentPanel.add(createDashboardPanel(), DASHBOARD_VIEW);
+        // UWAGA: Wymaga istnienia klasy AcceptancePanel.java w tym samym pakiecie
+        contentPanel.add(new AcceptedCommissionsFrame(dbConnection), ACCEPTANCE_VIEW);
+
+        // Wyświetl domyślnie Dashboard
+        cardLayout.show(contentPanel, DASHBOARD_VIEW);
     }
 
-    // ----------------------- SIDEBAR -----------------------
+    // ... reszta klasy MainFrame ...
 
-    // --- Metoda tworząca Panel Nawigacyjny ---
-    // --- Metoda tworząca Panel Nawigacyjny ---
-    // --- Metoda tworząca Panel Nawigacyjny ---
+    // ----------------------- SIDEBAR -----------------------
     private JPanel createSideBar() {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setPreferredSize(new Dimension(200, 800));
 
-        // ZMIANA KOLORU NA (77, 41, 173)
-        panel.setBackground(new Color(77, 41, 173));
+        // Fioletowe tło
+        panel.setBackground(new Color(MAIN_COLOR.getRed(), MAIN_COLOR.getGreen(), MAIN_COLOR.getBlue()));
 
-        // DODANIE IKONKI Z BIAŁYM OKRĘGIEM W TLE
+        // LOGO w białym okręgu
         try {
             ImageIcon icon = new ImageIcon("package-variant.png");
 
-            // 1. Skalowanie obrazka do 70% szerokości panelu (140x140 px)
             Image image = icon.getImage();
             Image scaledImage = image.getScaledInstance(140, 140, Image.SCALE_SMOOTH);
             ImageIcon scaledIcon = new ImageIcon(scaledImage);
 
             JLabel iconLabel = new JLabel(scaledIcon);
-
-            // Wyrównanie Label wewnątrz BorderLayout (CirclePanel)
             iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
             iconLabel.setVerticalAlignment(SwingConstants.CENTER);
 
-            // Tworzenie panelu z białym okręgiem i umieszczanie w nim ikony
             CirclePanel circleContainer = new CirclePanel(iconLabel);
-            circleContainer.setBackground(new Color(77, 41, 173)); // Tło panelu kontenera
-
-            // Wyśrodkowanie całego kontenera (CirclePanel) w pasku bocznym (Box Layout)
+            circleContainer.setBackground(MAIN_COLOR);
             circleContainer.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-            panel.add(Box.createRigidArea(new Dimension(0, 20))); // Górny margines
+            panel.add(Box.createRigidArea(new Dimension(0, 20)));
             panel.add(circleContainer);
-            panel.add(Box.createRigidArea(new Dimension(0, 10))); // Dolny margines
+            panel.add(Box.createRigidArea(new Dimension(0, 10)));
 
         } catch (Exception e) {
-            // Placeholder tekstowy
             JLabel placeholder = new JLabel("CARDBOARD");
-            placeholder.setFont(new Font("Arial", Font.BOLD, 16));
+            placeholder.setFont(new Font("Arial", Font.BOLD, 18));
             placeholder.setForeground(Color.WHITE);
             placeholder.setAlignmentX(Component.CENTER_ALIGNMENT);
             placeholder.setBorder(BorderFactory.createEmptyBorder(30, 0, 30, 0));
@@ -90,9 +98,23 @@ public class MainFrame extends JFrame {
             System.err.println("Błąd ładowania ikonki: " + e.getMessage());
         }
 
+        // MainFrame.java (Fragment metody createSideBar)
+
         // Przykładowe przyciski nawigacyjne
-        panel.add(createSidebarButton("Pulpit"));
-        panel.add(createSidebarButton("Przyjęcie Zleceń"));
+
+        // NOWA IMPLEMENTACJA Z OBSŁUGĄ KLIKNIĘĆ:
+        JButton dashboardBtn = createSidebarButton("Pulpit");
+        JButton acceptanceBtn = createSidebarButton("Przyjęcie Zleceń");
+
+        // Akcja dla Pulpitu
+        dashboardBtn.addActionListener(e -> showPanel(DASHBOARD_VIEW));
+
+        // Akcja dla Przyjęcia Zleceń
+        acceptanceBtn.addActionListener(e -> showPanel(ACCEPTANCE_VIEW));
+
+        panel.add(dashboardBtn);
+        panel.add(acceptanceBtn);
+        // Kontynuacja istniejących przycisków:
         panel.add(createSidebarButton("Stan Magazynu"));
         panel.add(createSidebarButton("Organizacja Wysyłek"));
         panel.add(createSidebarButton("Raporty"));
@@ -100,13 +122,16 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
+    private void showPanel(String panelName) {
+        cardLayout.show(contentPanel, panelName);
+    }
+
     private JButton createSidebarButton(String text) {
         JButton button = new JButton(text);
         button.setAlignmentX(Component.CENTER_ALIGNMENT);
         button.setMaximumSize(new Dimension(180, 50));
 
-        // ZMIANA KOLORU PRZYCISKU NA CIEMNIEJSZY FIOLET DLA KONTRASTU
-        button.setBackground(new Color(60, 30, 140));
+        button.setBackground(new Color(61, 35, 94));
         button.setForeground(Color.WHITE);
         button.setBorderPainted(false);
         button.setFocusPainted(false);
@@ -147,7 +172,7 @@ public class MainFrame extends JFrame {
             return 0;
         }
 
-        // MySQL: porównujemy samą datę (bez godziny)
+        // MySQL – porównujemy samą datę (bez godziny)
         String sql = """
                 SELECT COUNT(*) 
                 FROM orders 
@@ -170,57 +195,58 @@ public class MainFrame extends JFrame {
 
     // ------------------- DASHBOARD -------------------
 
-    // MainFrame.java (Cała metoda createDashboardPanel po poprawkach)
-
-    // --- Metoda tworząca Główny Panel Dashboardu ---
     private JPanel createDashboardPanel() {
         JPanel dashboard = new JPanel(new BorderLayout(10, 10));
         dashboard.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         dashboard.setBackground(new Color(240, 240, 240));
 
-        // 1. Nagłówek (Witaj, Imię i Nazwisko)
+        // 1. Nagłówek
         JPanel headerPanel = createHeaderPanel();
         dashboard.add(headerPanel, BorderLayout.NORTH);
 
-        // Wrapper dla sekcji środkowej (Wskaźniki + Wykres + Lista Akcji)
+        // Wrapper dla środka
         JPanel centerWrapper = new JPanel(new BorderLayout(10, 10));
         centerWrapper.setBackground(new Color(240, 240, 240));
 
-        // 2. Top Panel (Wskaźniki i Diagram)
-        // Użycie BorderLayout, aby wykres mógł zajmować CENTER, a liczniki EAST.
+        // 2. Górny panel (wykres + wskaźniki)
         JPanel topPanel = new JPanel(new BorderLayout(15, 15));
         topPanel.setBackground(new Color(240, 240, 240));
 
-        // Pobranie faktycznej liczby z bazy
+        // Dane z bazy
         int readyOrdersCount = fetchReadyOrdersCount();
+        int todayShipmentCount = fetchTodayShipmentCount();
 
-        // A. DIAGRAM KOŁOWY
-        // Użycie klasy OrderPieChartPanel.java - umieszczamy w CENTER
+        // A. Diagram kołowy (po lewej / center)
         JPanel chartPanel = new OrderPieChartPanel(dbConnection);
         topPanel.add(chartPanel, BorderLayout.CENTER);
 
-        // B. Kluczowe Wskaźniki (Grupa)
-        // Dwa liczniki ułożone pionowo (GridLayout 2x1)
+        // B. Kluczowe wskaźniki (po prawej)
         JPanel metricsWrapper = new JPanel(new GridLayout(2, 1, 15, 15));
         metricsWrapper.setBackground(new Color(240, 240, 240));
 
-        // Dwa panele z licznikami
-        metricsWrapper.add(createMetricPanel("Zlecenia gotowe do przyjęcia", String.valueOf(readyOrdersCount), new Color(255, 100, 100)));
-        metricsWrapper.add(createMetricPanel("Zlecenia do wysyłki dzisiaj", "5", new Color(100, 255, 100)));
+        metricsWrapper.add(createMetricPanel(
+                "Zlecenia gotowe do przyjęcia",
+                String.valueOf(readyOrdersCount),
+                new Color(255, 100, 100)
+        ));
 
-        // Ustawiamy wrapper liczników po prawej stronie wykresu
-        // Używamy BoxLayout, aby upewnić się, że metricsWrapper zajmie tyle miejsca, ile potrzebuje.
+        // TU JEST ZMIANA – zamiast "5" używamy wyniku z fetchTodayShipmentCount()
+        metricsWrapper.add(createMetricPanel(
+                "Zlecenia do wysyłki dzisiaj",
+                String.valueOf(todayShipmentCount),
+                new Color(100, 255, 100)
+        ));
+
         JPanel metricsContainer = new JPanel();
         metricsContainer.setLayout(new BoxLayout(metricsContainer, BoxLayout.Y_AXIS));
         metricsContainer.setBackground(new Color(240, 240, 240));
         metricsContainer.add(metricsWrapper);
-        metricsContainer.add(Box.createVerticalGlue()); // Wypycha wolną przestrzeń pod liczniki
+        metricsContainer.add(Box.createVerticalGlue());
 
-        topPanel.add(metricsContainer, BorderLayout.EAST); // <-- LICZNIKI W EAST (w opakowaniu)
+        topPanel.add(metricsContainer, BorderLayout.EAST);
+        centerWrapper.add(topPanel, BorderLayout.NORTH);
 
-        centerWrapper.add(topPanel, BorderLayout.NORTH); // Wskaźniki i Diagram na górze
-
-        // 3. Lista Oczekujących Akcji
+        // 3. Lista zleceń / akcje
         JScrollPane actionList = createActionList();
         centerWrapper.add(actionList, BorderLayout.CENTER);
 
@@ -265,7 +291,7 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
-    // (opcjonalny placeholder – aktualnie nieużywany, ale zostawiam)
+    // (opcjonalny placeholder – aktualnie nieużywany)
     private JPanel createChartPlaceholder(String title, Connection conn) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(Color.WHITE);
@@ -288,21 +314,8 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
-    // MainFrame.java
+    // ------------------- TABELA ZLECEŃ -------------------
 
-// ... (Inne metody) ...
-
-    /**
-     * Tworzy i zwraca panel zawierający tabelę dynamicznie wypełnioną zleceniami.
-     * Tabela ma aktywne sortowanie po nagłówkach kolumn, ale KOMÓRKI SĄ NIEMOŻLIWE DO EDYCJI.
-     * @return JScrollPane z JTable
-     */
-    // MainFrame.java (POPRAWIONA metoda createActionList)
-
-    /**
-     * Tworzy i zwraca JScrollPane zawierający tabelę dynamicznie wypełnioną zleceniami.
-     * @return JScrollPane z JTable
-     */
     private JScrollPane createActionList() {
         String[] columnNames = {"ID Zlecenia", "Tytuł", "Etap", "Priorytet", "Data Zlecenia"};
 
@@ -311,13 +324,19 @@ public class MainFrame extends JFrame {
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
+
         };
 
-        String sql = "SELECT id, title, stage, priority, order_date FROM orders WHERE stage NOT IN ('Zakończone', 'Anulowane') ORDER BY CASE priority WHEN 'Wysoka' THEN 1 WHEN 'Normalna' THEN 2 WHEN 'Niska' THEN 3 ELSE 4 END, order_date ASC";
+        String sql = "SELECT id, title, stage, priority, order_date " +
+                "FROM orders " +
+                "WHERE stage NOT IN ('Zakończone', 'Anulowane') " +
+                "ORDER BY " +
+                "CASE priority WHEN 'Wysoka' THEN 1 WHEN 'Normalna' THEN 2 WHEN 'Niska' THEN 3 ELSE 4 END, " +
+                "order_date ASC";
 
         if (dbConnection != null) {
-            try (java.sql.PreparedStatement pstmt = dbConnection.prepareStatement(sql);
-                 java.sql.ResultSet rs = pstmt.executeQuery()) {
+            try (PreparedStatement pstmt = dbConnection.prepareStatement(sql);
+                 ResultSet rs = pstmt.executeQuery()) {
 
                 while (rs.next()) {
                     model.addRow(new Object[]{
@@ -325,10 +344,11 @@ public class MainFrame extends JFrame {
                             rs.getString("title"),
                             rs.getString("stage"),
                             rs.getString("priority"),
-                            rs.getTimestamp("order_date").toLocalDateTime().toLocalDate().toString()
+                            rs.getTimestamp("order_date")
+                                    .toLocalDateTime().toLocalDate().toString()
                     });
                 }
-            } catch (java.sql.SQLException e) {
+            } catch (SQLException e) {
                 System.err.println("Błąd SQL podczas ładowania listy zleceń: " + e.getMessage());
                 model.addRow(new Object[]{"Błąd", "Nie udało się załadować danych", "", "", ""});
             }
@@ -340,40 +360,80 @@ public class MainFrame extends JFrame {
         table.setFillsViewportHeight(true);
         table.setRowHeight(25);
 
-        // Ustawienie sortowania po nagłówkach
-        javax.swing.table.TableRowSorter<javax.swing.table.TableModel> sorter = new javax.swing.table.TableRowSorter<>(model);
+        javax.swing.table.TableRowSorter<javax.swing.table.TableModel> sorter =
+                new javax.swing.table.TableRowSorter<>(model);
         table.setRowSorter(sorter);
 
-        // Niestandardowy comparator dla kolumny Priorytet
-        int priorityColumnIndex = 3;
-        sorter.setComparator(priorityColumnIndex, (String p1, String p2) -> {
-            // ... (logika sortowania priorytetów) ...
-            return 0; // Pominięto dla zwięzłości, zakładając, że logika jest przeniesiona.
-        });
+        // (tu możesz dodać comparator dla priorytetu, jeśli chcesz)
 
-        // -----------------------------------------------------------------
-        // KLUCZOWA POPRAWKA: Tworzymy JScrollPane bezpośrednio z JTable
-        // -----------------------------------------------------------------
         JScrollPane scrollPane = new JScrollPane(table);
-
-        // Dodajemy tytuł jako TitledBorder do JScrollPane
         scrollPane.setBorder(BorderFactory.createTitledBorder("Lista Aktywnych Zleceń"));
+        /*Jakby, chciała zmienić kolor obramowania
+        scrollPane.setBorder(BorderFactory.createTitledBorder(
+                BorderFactory.createLineBorder(new Color(150, 100, 255)), // Kolor linii obramowania (opcjonalnie)
+                "Lista Aktywnych Zleceń (Wymagających Akcji)",
+                javax.swing.border.TitledBorder.LEFT, // Pozycja tekstu
+                javax.swing.border.TitledBorder.TOP, // Pozycja tekstu
+                new Font("Arial", Font.BOLD, 14), // Czcionka
+                new Color(97, 61, 193) // <--- KOLOR TEKSTU TITLED BORDER (ciemniejszy fiolet)
+        ));*/
+        // 1. Zmiana wyglądu nagłówka
+        // ----------------------------------------------------
+        javax.swing.table.JTableHeader header = table.getTableHeader();
+        // Tutaj jest ustawiane pogrubienie i kolor tekstu:
+        header.setFont(new Font("Arial", Font.BOLD, 12));
+        header.setForeground(Color.WHITE);
+        // Tutaj jest ustawiany kolor tła nagłówka (sidebar color):
+        header.setBackground(MAIN_COLOR);
+        header.setPreferredSize(new Dimension(0, 30));
 
-        // Zwracamy pojedynczy JScrollPane
+        // Renderer dla nagłówka (to jest kluczowe, by kolor był poprawnie malowany)
+        header.setDefaultRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                // TE DWIE LINIE USTAWIAJĄ TŁO I KOLOR TEKSTU DLA TYTUŁÓW KOLUMN:
+                label.setBackground(MAIN_COLOR);
+                label.setForeground(Color.WHITE);
+                label.setFont(new Font("Arial", Font.BOLD, 12));
+                label.setHorizontalAlignment(SwingConstants.CENTER);
+                return label;
+            }
+        });
+        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+                // Sprawdzenie, czy wiersz nie jest zaznaczony
+                if (!isSelected) {
+                    if (row % 2 == 0) {
+                        c.setBackground(Color.WHITE);
+                    } else {
+                        // Ustawienie nowego fioletowego koloru
+                        c.setBackground(ALT_ROW_COLOR);
+                    }
+                }
+
+                // ... (Kod do wyrównywania i koloru tekstu) ...
+                c.setForeground(Color.BLACK);
+                return c;
+            }
+        });
         return scrollPane;
     }
+
     // ----------------------------------------------------------------------
-    // KLASA WEWNĘTRZNA do RYSOWANIA BIAŁEGO OKRĘGU WOKÓŁ IKONY
+    // KLASA WEWNĘTRZNA – biały okrąg wokół ikony w sideBar
     // ----------------------------------------------------------------------
     private class CirclePanel extends JPanel {
         private final JLabel iconLabel;
 
         public CirclePanel(JLabel iconLabel) {
             this.iconLabel = iconLabel;
-            // Wymuszamy rozmiar panelu (okrąg 150x150 plus marginesy, np. 160x160)
             setPreferredSize(new Dimension(160, 160));
             setMaximumSize(new Dimension(160, 160));
-            setOpaque(false); // Wymagane, aby tło (fiolet) było widoczne
+            setOpaque(false);
             setLayout(new BorderLayout());
             add(iconLabel, BorderLayout.CENTER);
         }
@@ -383,14 +443,10 @@ public class MainFrame extends JFrame {
             super.paintComponent(g);
             Graphics2D g2d = (Graphics2D) g.create();
 
-            // Włączamy Antialiasing dla gładkich krawędzi
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
 
-            // Ustawiamy biały kolor dla okręgu
             g2d.setColor(Color.WHITE);
-
-            // Rysujemy wypełniony owal (koło), zaczynając od (5, 5)
-            // i mając rozmiar 150x150 wewnątrz panelu 160x160
             int margin = 1;
             int size = getWidth() - 2 * margin;
             g2d.fillOval(margin, margin, size, size);
@@ -398,5 +454,4 @@ public class MainFrame extends JFrame {
             g2d.dispose();
         }
     }
-    // ----------------------------------------------------------------------
 }
