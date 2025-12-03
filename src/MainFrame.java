@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainFrame extends JFrame {
 
@@ -16,6 +18,8 @@ public class MainFrame extends JFrame {
     private final String fullName;
     private final Color MAIN_COLOR = new Color(87, 50, 135); //97\
     Color ALT_ROW_COLOR = new Color(212, 191, 255);
+    private static final int REFRESH_INTERVAL = 3000; // 3 sekundy
+    private final List<Refreshable> refreshablePanels = new ArrayList<>();
 
     private final JPanel contentPanel;
     private final CardLayout cardLayout = new CardLayout();
@@ -116,7 +120,7 @@ public class MainFrame extends JFrame {
         panel.add(acceptanceBtn);
         // Kontynuacja istniejących przycisków:
         panel.add(createSidebarButton("Stan Magazynu"));
-        panel.add(createSidebarButton("Organizacja Wysyłek"));
+        panel.add(createSidebarButton("Czat"));
         panel.add(createSidebarButton("Raporty"));
 
         return panel;
@@ -422,7 +426,17 @@ public class MainFrame extends JFrame {
         });
         return scrollPane;
     }
+    private void startGlobalRefreshTimer() {
+        // Użycie javax.swing.Timer jest kluczowe, ponieważ jego akcje są wykonywane w wątku EDT.
+        Timer globalTimer = new Timer(REFRESH_INTERVAL, e -> {
+            // Logika wykonywana co 3 sekundy
+            for (Refreshable panel : refreshablePanels) {
+                // Wywołaj metodę odświeżającą w każdym panelu z listy
+                panel.refreshData();
+            }
+        });
 
+    }
     // ----------------------------------------------------------------------
     // KLASA WEWNĘTRZNA – biały okrąg wokół ikony w sideBar
     // ----------------------------------------------------------------------
@@ -453,5 +467,7 @@ public class MainFrame extends JFrame {
 
             g2d.dispose();
         }
+
     }
+
 }

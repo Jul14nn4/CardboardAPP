@@ -2,6 +2,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableRowSorter;
+import javax.swing.table.TableColumnModel;
 import java.awt.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -10,12 +11,16 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 public class AcceptedCommissionsFrame extends JPanel {
 
     private final Connection dbConnection;
-    private final Color SIDEBAR_COLOR = new Color(50, 50, 50);
+    private final Color SIDEBAR_COLOR = new Color(87, 50, 135);
     private final Color ALT_ROW_COLOR = new Color(212, 191, 255); // #bbadff
+    private JTable acceptanceTable;
+    private DefaultTableModel tableModel;
 
     public AcceptedCommissionsFrame(Connection conn) {
         this.dbConnection = conn;
@@ -27,8 +32,19 @@ public class AcceptedCommissionsFrame extends JPanel {
         // 1. Nagłówek
         add(createHeader(), BorderLayout.NORTH);
 
-        // 2. Tabela Akcji
-        add(createAcceptanceTable(), BorderLayout.CENTER);
+        // 2. Tabela Akcji i Przycisk
+        add(createContentPanel(), BorderLayout.CENTER);
+    }
+
+    /**
+     * Tworzy kontener na tabelę i przycisk.
+     */
+    private JPanel createContentPanel() {
+        JPanel contentPanel = new JPanel(new BorderLayout(10, 10));
+        contentPanel.add(createAcceptanceTable(), BorderLayout.CENTER);
+        contentPanel.add(createActionButton(), BorderLayout.SOUTH);
+        contentPanel.setBackground(new Color(240, 240, 240));
+        return contentPanel;
     }
 
     /**
@@ -38,7 +54,7 @@ public class AcceptedCommissionsFrame extends JPanel {
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(new Color(240, 240, 240));
 
-        JLabel title = new JLabel("Przyjęcie Zleceń");
+        JLabel title = new JLabel("Twoje zlecenia");
         title.setFont(new Font("Arial", Font.BOLD, 24));
         title.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
 
@@ -51,44 +67,36 @@ public class AcceptedCommissionsFrame extends JPanel {
      * Logika tabeli jest przeniesiona z MainFrame.
      */
     private JScrollPane createAcceptanceTable() {
-        String[] columnNames = {"ID Zlecenia", "Tytuł", "Etap", "Priorytet", "Data Zlecenia"};
+        // Dodano nową kolumnę "Zrealizowano" typu Boolean
+        String[] columnNames = {"ID Zlecenia", "Tytuł", "Etap", "Priorytet", "Data Zlecenia", "Zrealizowano"};
 
-        // Niestandardowy model, który blokuje edycję komórek
-        DefaultTableModel model = new DefaultTableModel(columnNames, 0) {
+        // Zmieniono model, aby obsłużyć typ Boolean dla nowej kolumny
+        tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false;
+                // Pozwalamy na edycję tylko ostatniej kolumny (Zrealizowano)
+                return column == 5;
+            }
+
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                // Ustawiamy typ dla kolumny "Zrealizowano" na Boolean
+                if (columnIndex == 5) {
+                    return Boolean.class;
+                }
+                return super.getColumnClass(columnIndex);
             }
         };
 
-        // Zapytanie SQL: Wyświetla te same aktywne zlecenia co na dashboardzie
-        String sql = "SELECT id, title, stage, priority, order_date FROM orders WHERE stage NOT IN ('Zakończone', 'Anulowane') ORDER BY CASE priority WHEN 'Wysoka' THEN 1 WHEN 'Normalna' THEN 2 WHEN 'Niska' THEN 3 ELSE 4 END, order_date ASC";
+        acceptanceTable = new JTable(tableModel);
+        loadOrdersToTable(); // Ładowanie danych przeniesione do osobnej metody
 
-        if (dbConnection != null) {
-            try (PreparedStatement pstmt = dbConnection.prepareStatement(sql);
-                 ResultSet rs = pstmt.executeQuery()) {
-
-                while (rs.next()) {
-                    model.addRow(new Object[]{
-                            rs.getInt("id"),
-                            rs.getString("title"),
-                            rs.getString("stage"),
-                            rs.getString("priority"),
-                            rs.getTimestamp("order_date").toLocalDateTime().toLocalDate().toString()
-                    });
-                }
-            } catch (SQLException e) {
-                System.err.println("Błąd SQL podczas ładowania listy zleceń do przyjęcia: " + e.getMessage());
-            }
-        }
-
-        JTable table = new JTable(model);
-        table.setFillsViewportHeight(true);
-        table.setRowHeight(25);
-        table.setGridColor(new Color(220, 220, 220));
+        acceptanceTable.setFillsViewportHeight(true);
+        acceptanceTable.setRowHeight(25);
+        acceptanceTable.setGridColor(new Color(220, 220, 220));
 
         // 1. Zmiana wyglądu nagłówka
-        javax.swing.table.JTableHeader header = table.getTableHeader();
+        javax.swing.table.JTableHeader header = acceptanceTable.getTableHeader();
         header.setFont(new Font("Arial", Font.BOLD, 12));
         header.setForeground(Color.WHITE);
         header.setBackground(SIDEBAR_COLOR);
@@ -106,8 +114,8 @@ public class AcceptedCommissionsFrame extends JPanel {
             }
         });
 
-        // 2. Naprzemienne kolory wierszy
-        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+        // 2. Naprzemienne kolory wierszy i wyrównanie dla wszystkich kolumn
+        acceptanceTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
@@ -120,7 +128,8 @@ public class AcceptedCommissionsFrame extends JPanel {
                     }
                 }
 
-                if (column == 0) {
+                // Wyrównanie dla kolumny ID (0) i Checkboxa (5)
+                if (column == 0 || column == 5) {
                     ((JLabel) c).setHorizontalAlignment(SwingConstants.CENTER);
                 } else {
                     ((JLabel) c).setHorizontalAlignment(SwingConstants.LEFT);
@@ -131,9 +140,15 @@ public class AcceptedCommissionsFrame extends JPanel {
             }
         });
 
+        // Renderer i Editor dla Checkboxa - nie są wymagane dla typu Boolean, ale dla customizacji
+        TableColumnModel tcm = acceptanceTable.getColumnModel();
+        // Ustawienie szerokości kolumny Zrealizowano
+        tcm.getColumn(5).setPreferredWidth(100);
+        tcm.getColumn(5).setMaxWidth(100);
+
         // 3. Włączenie i konfiguracja sortowania
-        TableRowSorter<javax.swing.table.TableModel> sorter = new TableRowSorter<>(model);
-        table.setRowSorter(sorter);
+        TableRowSorter<javax.swing.table.TableModel> sorter = new TableRowSorter<>(tableModel);
+        acceptanceTable.setRowSorter(sorter);
 
         // Niestandardowy comparator dla kolumny Priorytet (zachowany)
         int priorityColumnIndex = 3;
@@ -148,9 +163,129 @@ public class AcceptedCommissionsFrame extends JPanel {
             return order1.compareTo(order2);
         });
 
-        JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.setBorder(BorderFactory.createTitledBorder("Lista Oczekujących Zleceń do Przyjęcia"));
+        JScrollPane scrollPane = new JScrollPane(acceptanceTable);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Lista Oczekujących Zleceń do Wykonania"));
 
         return scrollPane;
+    }
+
+    /**
+     * Wczytuje dane z bazy i wypełnia nimi model tabeli.
+     */
+    private void loadOrdersToTable() {
+        tableModel.setRowCount(0); // Wyczyść tabelę przed ponownym wczytaniem
+        String sql = "SELECT id, title, stage, priority, order_date FROM orders WHERE stage = 'W magazynie' ORDER BY CASE priority WHEN 'Wysoka' THEN 1 WHEN 'Normalna' THEN 2 WHEN 'Niska' THEN 3 ELSE 4 END, order_date ASC";
+
+        if (dbConnection != null) {
+            try (PreparedStatement pstmt = dbConnection.prepareStatement(sql);
+                 ResultSet rs = pstmt.executeQuery()) {
+
+                while (rs.next()) {
+                    tableModel.addRow(new Object[]{
+                            rs.getInt("id"),
+                            rs.getString("title"),
+                            rs.getString("stage"),
+                            rs.getString("priority"),
+                            rs.getTimestamp("order_date").toLocalDateTime().toLocalDate().toString(),
+                            // Domyślnie checkbox niezaznaczony
+                            false
+                    });
+                }
+            } catch (SQLException e) {
+                System.err.println("Błąd SQL podczas ładowania listy zleceń do przyjęcia: " + e.getMessage());
+            }
+        }
+    }
+
+
+    /**
+     * Tworzy przycisk do aktualizacji statusu zleceń.
+     */
+    private JButton createActionButton() {
+        JButton button = new JButton("Oznacz zaznaczone jako Wysłane");
+        button.setFont(new Font("Arial", Font.BOLD, 14));
+        button.setBackground(SIDEBAR_COLOR.brighter());
+        button.setForeground(Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+
+        button.addActionListener(e -> updateSelectedOrders());
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setBackground(new Color(240, 240, 240));
+        buttonPanel.add(button);
+        return button;
+    }
+
+    /**
+     * Aktualizuje status zaznaczonych zleceń w bazie danych.
+     */
+    private void updateSelectedOrders() {
+        List<Integer> selectedOrderIds = new ArrayList<>();
+        int idColumnIndex = 0; // Kolumna z ID Zlecenia
+        int checkboxColumnIndex = 5; // Kolumna z checkboxem
+
+        // 1. Zbieranie ID zaznaczonych zleceń
+        for (int i = 0; i < tableModel.getRowCount(); i++) {
+            // Konwersja indeksu widoku na indeks modelu, aby prawidłowo pobrać dane
+            int modelRow = acceptanceTable.convertRowIndexToModel(i);
+            Boolean isSelected = (Boolean) tableModel.getValueAt(modelRow, checkboxColumnIndex);
+
+            if (isSelected != null && isSelected) {
+                Integer orderId = (Integer) tableModel.getValueAt(modelRow, idColumnIndex);
+                selectedOrderIds.add(orderId);
+            }
+        }
+
+        if (selectedOrderIds.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Nie wybrano żadnego zlecenia do aktualizacji.", "Informacja", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        // 2. Aktualizacja bazy danych
+        String sql = "UPDATE orders SET stage = 'Wysłane' WHERE id = ?";
+        int updatedCount = 0;
+
+        try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
+            dbConnection.setAutoCommit(false); // Rozpocznij transakcję
+
+            for (Integer id : selectedOrderIds) {
+                pstmt.setInt(1, id);
+                pstmt.addBatch();
+            }
+
+            int[] batchResults = pstmt.executeBatch();
+            for (int result : batchResults) {
+                if (result > 0) {
+                    updatedCount += result;
+                }
+            }
+
+            dbConnection.commit(); // Zatwierdź transakcję
+            JOptionPane.showMessageDialog(this, String.format("Pomyślnie zaktualizowano status dla %d zleceń na 'Wysłane'.", updatedCount), "Sukces", JOptionPane.INFORMATION_MESSAGE);
+
+        } catch (SQLException ex) {
+            try {
+                if (dbConnection != null) {
+                    dbConnection.rollback(); // Wycofaj transakcję w razie błędu
+                }
+            } catch (SQLException rollbackEx) {
+                System.err.println("Błąd podczas wycofywania transakcji: " + rollbackEx.getMessage());
+            }
+            System.err.println("Błąd SQL podczas aktualizacji statusu zleceń: " + ex.getMessage());
+            JOptionPane.showMessageDialog(this, "Wystąpił błąd podczas aktualizacji zleceń.", "Błąd", JOptionPane.ERROR_MESSAGE);
+            return;
+        } finally {
+            try {
+                if (dbConnection != null) {
+                    dbConnection.setAutoCommit(true); // Przywróć domyślny tryb
+                }
+            } catch (SQLException autoCommitEx) {
+                System.err.println("Błąd podczas przywracania auto-commit: " + autoCommitEx.getMessage());
+            }
+        }
+
+        // 3. Odświeżenie tabeli
+        loadOrdersToTable();
     }
 }
