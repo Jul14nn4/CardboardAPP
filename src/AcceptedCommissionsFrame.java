@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AcceptedCommissionsFrame extends JPanel {
+public class AcceptedCommissionsFrame extends JPanel implements Refreshable{
 
     private final Connection dbConnection;
     private final Color SIDEBAR_COLOR = new Color(87, 50, 135);
@@ -114,25 +114,43 @@ public class AcceptedCommissionsFrame extends JPanel {
             }
         });
 
-        // 2. Naprzemienne kolory wierszy i wyrównanie dla wszystkich kolumn
+        // AcceptedCommissionsFrame.java (w metodzie createAcceptanceTable, ok. linii 139)
+
+// 2. Naprzemienne kolory wierszy i wyrównanie dla wszystkich kolumn
         acceptanceTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                // Pobiera domyślny komponent (JLabel dla większości, JCheckBox dla Boolean.class)
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
+                // ZMIANA 1: Ustawienie komponentu jako nieprzezroczystego.
+                // Jest to kluczowe, aby malowanie tła zadziałało dla JCheckBox.
+                if (c instanceof JComponent) {
+                    ((JComponent) c).setOpaque(true);
+                }
+
+                // Sprawdzenie, czy wiersz nie jest zaznaczony
                 if (!isSelected) {
                     if (row % 2 == 0) {
                         c.setBackground(Color.WHITE);
                     } else {
+                        // Ustawienie nowego fioletowego koloru
                         c.setBackground(ALT_ROW_COLOR); // Fioletowy #bbadff
                     }
                 }
 
-                // Wyrównanie dla kolumny ID (0) i Checkboxa (5)
-                if (column == 0 || column == 5) {
-                    ((JLabel) c).setHorizontalAlignment(SwingConstants.CENTER);
-                } else {
-                    ((JLabel) c).setHorizontalAlignment(SwingConstants.LEFT);
+                // ZMIANA 2: Bezpieczne wyrównanie tylko dla komponentów, które są JLabelami.
+                if (c instanceof JLabel) {
+                    // Wyrównanie dla kolumny ID (0)
+                    if (column == 0) {
+                        ((JLabel) c).setHorizontalAlignment(SwingConstants.CENTER);
+                    } else {
+                        ((JLabel) c).setHorizontalAlignment(SwingConstants.LEFT);
+                    }
+                }
+                // Wyrównanie dla JCheckBox jest opcjonalne, ponieważ już domyślnie jest często wyśrodkowany.
+                else if (c instanceof JCheckBox) {
+                    ((JCheckBox) c).setHorizontalAlignment(SwingConstants.CENTER);
                 }
 
                 c.setForeground(Color.BLACK);
@@ -287,5 +305,10 @@ public class AcceptedCommissionsFrame extends JPanel {
 
         // 3. Odświeżenie tabeli
         loadOrdersToTable();
+    }
+
+    @Override
+    public void refreshData() {
+
     }
 }

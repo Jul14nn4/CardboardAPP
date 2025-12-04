@@ -27,6 +27,8 @@ public class MainFrame extends JFrame {
     // Stałe identyfikatory dla widoków
     private static final String DASHBOARD_VIEW = "DASHBOARD_VIEW";
     private static final String ACCEPTANCE_VIEW = "ACCEPTANCE_VIEW";
+    private static final String WAREHOUSE_VIEW = "WAREHOUSE_VIEW";
+    private static final String CHAT_VIEW = "CHAT_VIEW";
 
     public MainFrame(String username, String role, String fullName, Connection conn) {
         this.dbConnection = conn;
@@ -56,6 +58,9 @@ public class MainFrame extends JFrame {
         contentPanel.add(createDashboardPanel(), DASHBOARD_VIEW);
         // UWAGA: Wymaga istnienia klasy AcceptancePanel.java w tym samym pakiecie
         contentPanel.add(new AcceptedCommissionsFrame(dbConnection), ACCEPTANCE_VIEW);
+
+        contentPanel.add(new StanMagazynuFrame(dbConnection), WAREHOUSE_VIEW) ;
+        contentPanel.add(new Chat(dbConnection), CHAT_VIEW) ;
 
         // Wyświetl domyślnie Dashboard
         cardLayout.show(contentPanel, DASHBOARD_VIEW);
@@ -109,6 +114,8 @@ public class MainFrame extends JFrame {
         // NOWA IMPLEMENTACJA Z OBSŁUGĄ KLIKNIĘĆ:
         JButton dashboardBtn = createSidebarButton("Pulpit");
         JButton acceptanceBtn = createSidebarButton("Przyjęcie Zleceń");
+        JButton warehouseBtn = createSidebarButton("Stan Magazynu");
+        JButton chatBtn = createSidebarButton("Czat");
 
         // Akcja dla Pulpitu
         dashboardBtn.addActionListener(e -> showPanel(DASHBOARD_VIEW));
@@ -116,11 +123,13 @@ public class MainFrame extends JFrame {
         // Akcja dla Przyjęcia Zleceń
         acceptanceBtn.addActionListener(e -> showPanel(ACCEPTANCE_VIEW));
 
+        warehouseBtn.addActionListener(e -> showPanel(WAREHOUSE_VIEW));
+        chatBtn.addActionListener(e -> showPanel(CHAT_VIEW));
+
         panel.add(dashboardBtn);
         panel.add(acceptanceBtn);
-        // Kontynuacja istniejących przycisków:
-        panel.add(createSidebarButton("Stan Magazynu"));
-        panel.add(createSidebarButton("Czat"));
+        panel.add(warehouseBtn);
+        panel.add(chatBtn);
         panel.add(createSidebarButton("Raporty"));
 
         return panel;
