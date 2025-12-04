@@ -8,7 +8,7 @@ import java.sql.SQLException;
 public class Main {
 
     // ZMIANA: FLAGA DEBUGOWANIA
-    private static final boolean SKIP_LOGIN = true;
+    private static final boolean SKIP_LOGIN = false;
 
     public static void main(String[] args) {
 

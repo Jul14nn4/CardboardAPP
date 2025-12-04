@@ -17,6 +17,7 @@ public class MainFrame extends JFrame {
     private final String role;
     private final String fullName;
     private final Color MAIN_COLOR = new Color(87, 50, 135); //97\
+    private final int workerId;
     Color ALT_ROW_COLOR = new Color(212, 191, 255);
     private static final int REFRESH_INTERVAL = 3000; // 3 sekundy
     private final List<Refreshable> refreshablePanels = new ArrayList<>();
@@ -35,6 +36,7 @@ public class MainFrame extends JFrame {
         this.username = username;
         this.role = role;
         this.fullName = fullName;
+        this.workerId = getWorkerId(conn, username);
 
         setTitle("System Cardboard - Zalogowano jako: " + fullName + " (" + role + ")");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -60,7 +62,7 @@ public class MainFrame extends JFrame {
         contentPanel.add(new AcceptedCommissionsFrame(dbConnection), ACCEPTANCE_VIEW);
 
         contentPanel.add(new StanMagazynuFrame(dbConnection), WAREHOUSE_VIEW) ;
-        contentPanel.add(new Chat(dbConnection), CHAT_VIEW) ;
+        contentPanel.add(new Chat(dbConnection, workerId, username), CHAT_VIEW) ;
 
         // Wyświetl domyślnie Dashboard
         cardLayout.show(contentPanel, DASHBOARD_VIEW);
@@ -303,7 +305,21 @@ public class MainFrame extends JFrame {
         panel.add(valueLabel, BorderLayout.CENTER);
         return panel;
     }
-
+    // Dodaj metodę pomocniczą do MainFrame
+    private int getWorkerId(Connection conn, String username) {
+        String sql = "SELECT id FROM users_workers WHERE username = ?";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, username);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("id");
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Błąd SQL podczas pobierania workerId: " + e.getMessage());
+        }
+        return -1; // Zwróć -1 w razie błędu/braku
+    }
     // (opcjonalny placeholder – aktualnie nieużywany)
     private JPanel createChartPlaceholder(String title, Connection conn) {
         JPanel panel = new JPanel(new BorderLayout());

@@ -5,8 +5,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -34,8 +32,8 @@ public class Chat extends JPanel implements Refreshable {
     private int currentThreadId = -1;
     private String currentThreadTopic = "Brak wybranej konwersacji";
 
-    // Klasa do przechowywania danych o wątku czatu
-    private static class ChatThread {
+    // ZMIANA TUTAJ: Klasa musi być publiczna, aby NewThreadDialog mogło jej użyć.
+    public static class ChatThread {
         int id;
         String topic;
         String createdAt;
@@ -61,7 +59,7 @@ public class Chat extends JPanel implements Refreshable {
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         setBackground(new Color(240, 240, 240));
 
-        // 1. Nagłówek (możesz użyć metody z AcceptedCommissionsFrame)
+        // 1. Nagłówek
         add(createHeader(), BorderLayout.NORTH);
 
         // 2. Główny kontener - podział na listę wątków i widok czatu
@@ -90,7 +88,6 @@ public class Chat extends JPanel implements Refreshable {
 
     // Metoda tworząca nagłówek panelu
     private JPanel createHeader() {
-        // Wzorując się na innych plikach, tworzymy prosty nagłówek
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setOpaque(false);
 
@@ -103,29 +100,45 @@ public class Chat extends JPanel implements Refreshable {
         return headerPanel;
     }
 
-    // Metoda tworząca główną zawartość
+    // Metoda tworząca główną zawartość (zawiera przycisk "Nowa konwersacja")
     private JSplitPane createMainContentPanel() {
 
-        // --- Lewy panel: Historia rozmów ---
+        // --- Lewy panel: Historia rozmów (threadsPanel) ---
         JPanel threadsPanel = new JPanel(new BorderLayout());
-        threadsPanel.setBorder(BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(SIDEBAR_COLOR),
-                "Historia rozmów",
-                javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
-                javax.swing.border.TitledBorder.DEFAULT_POSITION,
-                new Font("Arial", Font.BOLD, 16),
-                SIDEBAR_COLOR
-        ));
+        threadsPanel.setBorder(BorderFactory.createLineBorder(SIDEBAR_COLOR));
 
+        // NOWA SEKCJA: Nagłówek dla listy wątków (zawierający przycisk "Nowa konwersacja")
+        JPanel threadsHeaderPanel = new JPanel(new BorderLayout());
+        threadsHeaderPanel.setBackground(Color.WHITE);
+        threadsHeaderPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Marginesy
+
+        // Tytuł listy
+        JLabel threadsTitle = new JLabel("Historia rozmów");
+        threadsTitle.setFont(new Font("Arial", Font.BOLD, 16));
+        threadsTitle.setForeground(SIDEBAR_COLOR);
+        threadsHeaderPanel.add(threadsTitle, BorderLayout.WEST);
+
+        // Przycisk "Nowa konwersacja"
+        JButton newConversationButton = new JButton("Nowa konwersacja");
+        newConversationButton.setFont(new Font("Arial", Font.PLAIN, 12));
+        newConversationButton.setBackground(new Color(150, 150, 250));
+        newConversationButton.setForeground(Color.WHITE);
+        newConversationButton.addActionListener(e -> showNewThreadDialog());
+
+        threadsHeaderPanel.add(newConversationButton, BorderLayout.EAST);
+
+        threadsPanel.add(threadsHeaderPanel, BorderLayout.NORTH); // Dodanie nagłówka na górę
+
+        // Inicjalizacja listy wątków
         threadsListModel = new DefaultListModel<>();
         threadsList = new JList<>(threadsListModel);
         threadsList.setFont(new Font("Arial", Font.PLAIN, 14));
         threadsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        threadsList.setCellRenderer(new ThreadListRenderer()); // Niestandardowy renderer
+        threadsList.setCellRenderer(new ThreadListRenderer());
 
         threadsPanel.add(new JScrollPane(threadsList), BorderLayout.CENTER);
 
-        // --- Prawy panel: Widok Czatu ---
+        // --- Prawy panel: Widok Czatu (chatPanel) ---
         JPanel chatPanel = new JPanel(new BorderLayout());
         chatPanel.setBorder(BorderFactory.createLineBorder(SIDEBAR_COLOR));
 
@@ -133,7 +146,6 @@ public class Chat extends JPanel implements Refreshable {
         chatViewPanel = new JPanel(new BorderLayout());
         chatViewPanel.setBackground(Color.LIGHT_GRAY);
         chatViewPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-        updateChatViewPanelTitle();
         chatPanel.add(chatViewPanel, BorderLayout.NORTH);
 
         // Obszar na wiadomości
@@ -142,8 +154,11 @@ public class Chat extends JPanel implements Refreshable {
         chatPanel.add(chatScrollPane, BorderLayout.CENTER);
 
         // Panel do wpisywania wiadomości
-        JPanel inputPanel = createInputPanel();
+        JPanel inputPanel = createInputPanel(); // inicjalizuje messageInput i sendButton
         chatPanel.add(inputPanel, BorderLayout.SOUTH);
+
+        // PRAWIDŁOWE MIEJSCE: Wywołanie aktualizacji panelu po zainicjalizowaniu wszystkich komponentów
+        updateChatViewPanelTitle();
 
         // Używamy JSplitPane do podziału
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, threadsPanel, chatPanel);
@@ -183,9 +198,47 @@ public class Chat extends JPanel implements Refreshable {
         chatViewPanel.add(titleLabel, BorderLayout.CENTER);
         chatViewPanel.revalidate();
         chatViewPanel.repaint();
-        sendButton.setEnabled(currentThreadId != -1);
-        messageInput.setEnabled(currentThreadId != -1);
+
+        if (sendButton != null) {
+            sendButton.setEnabled(currentThreadId != -1);
+        }
+        if (messageInput != null) {
+            messageInput.setEnabled(currentThreadId != -1);
+        }
     }
+
+    // NOWA METODA: Pokazuje okno dialogowe do tworzenia nowego wątku
+    private void showNewThreadDialog() {
+        NewThreadDialog dialog = new NewThreadDialog(
+                SwingUtilities.getWindowAncestor(this),
+                dbConnection,
+                loggedWorkerId,
+                loggedWorkerUsername
+        );
+        dialog.setVisible(true);
+
+        if (dialog.isThreadCreated()) {
+            ChatThread newThread = dialog.getCreatedThread();
+            if (newThread != null) {
+                currentThreadId = newThread.id;
+                currentThreadTopic = newThread.topic;
+
+                loadThreadsList();
+
+                for (int i = 0; i < threadsListModel.getSize(); i++) {
+                    if (threadsListModel.getElementAt(i).id == currentThreadId) {
+                        threadsList.setSelectedIndex(i);
+                        break;
+                    }
+                }
+
+                updateChatViewPanelTitle();
+                loadChatMessages();
+                messageInput.requestFocusInWindow();
+            }
+        }
+    }
+
 
     // ----------------------------------------------------------------------
     // LOGIKA BAZY DANYCH
@@ -207,7 +260,6 @@ public class Chat extends JPanel implements Refreshable {
                     ));
                 }
 
-                // Zachowanie wybranego wątku
                 if (currentThreadId != -1 && threadsListModel.getSize() > 0) {
                     for (int i = 0; i < threadsListModel.getSize(); i++) {
                         if (threadsListModel.getElementAt(i).id == currentThreadId) {
@@ -227,7 +279,6 @@ public class Chat extends JPanel implements Refreshable {
     private void loadChatMessages() {
         if (currentThreadId == -1) return;
 
-        // Używamy JEditorPane lub prostego JPanel z BoxLayout.Y_AXIS
         JPanel messagesContainer = new JPanel();
         messagesContainer.setLayout(new BoxLayout(messagesContainer, BoxLayout.Y_AXIS));
         messagesContainer.setBackground(Color.WHITE);
@@ -250,7 +301,7 @@ public class Chat extends JPanel implements Refreshable {
                             timestamp.format(DATE_FORMATTER),
                             isOwnMessage
                     ));
-                    messagesContainer.add(Box.createVerticalStrut(5)); // Dodaj mały odstęp między wiadomościami
+                    messagesContainer.add(Box.createVerticalStrut(5));
                 }
             }
         } catch (SQLException e) {
@@ -259,9 +310,8 @@ public class Chat extends JPanel implements Refreshable {
 
         chatScrollPane.setViewportView(messagesContainer);
 
-        // Automatyczne przewijanie na dół
         JScrollBar verticalScrollBar = chatScrollPane.getVerticalScrollBar();
-        verticalScrollBar.setValue(verticalScrollBar.getMaximum());
+        SwingUtilities.invokeLater(() -> verticalScrollBar.setValue(verticalScrollBar.getMaximum()));
     }
 
     // Metoda do tworzenia panelu pojedynczej wiadomości
@@ -270,15 +320,16 @@ public class Chat extends JPanel implements Refreshable {
         messageWrapper.setLayout(new BoxLayout(messageWrapper, BoxLayout.X_AXIS));
         messageWrapper.setOpaque(false);
 
-        // Główny panel wiadomości
         JPanel messageContent = new JPanel(new BorderLayout());
         messageContent.setBackground(isOwnMessage ? MESSAGE_BG_OWN : MESSAGE_BG_OTHER);
         messageContent.setBorder(BorderFactory.createCompoundBorder(
-                new EmptyBorder(5, 10, 5, 10), // Wewnętrzne marginesy
-                BorderFactory.createLineBorder(isOwnMessage ? SIDEBAR_COLOR : Color.LIGHT_GRAY, 1) // Cienki border
+                new EmptyBorder(5, 10, 5, 10),
+                BorderFactory.createLineBorder(isOwnMessage ? SIDEBAR_COLOR : Color.LIGHT_GRAY, 1)
         ));
 
-        // Tekst wiadomości
+        messageContent.setMaximumSize(messageContent.getPreferredSize());
+
+
         JTextArea messageArea = new JTextArea(message);
         messageArea.setWrapStyleWord(true);
         messageArea.setLineWrap(true);
@@ -286,8 +337,8 @@ public class Chat extends JPanel implements Refreshable {
         messageArea.setOpaque(false);
         messageArea.setFont(new Font("Arial", Font.PLAIN, 14));
         messageArea.setForeground(Color.BLACK);
+        messageArea.setBorder(new EmptyBorder(0, 0, 5, 0));
 
-        // Etykieta czasowa
         JLabel timestampLabel = new JLabel(timestamp, isOwnMessage ? SwingConstants.RIGHT : SwingConstants.LEFT);
         timestampLabel.setFont(new Font("Arial", Font.ITALIC, 10));
         timestampLabel.setForeground(Color.GRAY);
@@ -295,18 +346,17 @@ public class Chat extends JPanel implements Refreshable {
         messageContent.add(messageArea, BorderLayout.CENTER);
         messageContent.add(timestampLabel, BorderLayout.SOUTH);
 
-        // Ustawienie wyrównania
         if (isOwnMessage) {
-            messageWrapper.add(Box.createHorizontalGlue()); // Wypycha wiadomość na prawo
+            messageWrapper.add(Box.createHorizontalGlue());
             messageWrapper.add(messageContent);
-            messageWrapper.add(Box.createHorizontalStrut(10)); // Prawy margines
+            messageWrapper.add(Box.createHorizontalStrut(10));
+            messageWrapper.setAlignmentX(Component.RIGHT_ALIGNMENT);
         } else {
-            messageWrapper.add(Box.createHorizontalStrut(10)); // Lewy margines
+            messageWrapper.add(Box.createHorizontalStrut(10));
             messageWrapper.add(messageContent);
-            messageWrapper.add(Box.createHorizontalGlue()); // Wypycha wiadomość na lewo
+            messageWrapper.add(Box.createHorizontalGlue());
+            messageWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
         }
-
-        messageContent.setMaximumSize(new Dimension(messageContent.getPreferredSize().width + 10, messageContent.getPreferredSize().height + 10));
 
         return messageWrapper;
     }
@@ -328,9 +378,8 @@ public class Chat extends JPanel implements Refreshable {
 
             pstmt.executeUpdate();
 
-            messageInput.setText(""); // Wyczyść pole po wysłaniu
+            messageInput.setText("");
 
-            // Natychmiastowe odświeżenie czatu
             loadChatMessages();
 
         } catch (SQLException ex) {
@@ -339,13 +388,11 @@ public class Chat extends JPanel implements Refreshable {
         }
     }
 
-    // 4. Implementacja automatycznego odświeżania
+    // 4. Implementacja automatycznego odświeżania (wywoływana co 3 sekundy)
     @Override
     public void refreshData() {
-        // Odśwież listę wątków (nowe wiadomości lub wątki)
         loadThreadsList();
 
-        // Odśwież wiadomości w aktualnie wybranym wątku
         if (currentThreadId != -1) {
             loadChatMessages();
         }
@@ -363,7 +410,6 @@ public class Chat extends JPanel implements Refreshable {
 
             ChatThread thread = (ChatThread) value;
 
-            // HTML dla formatowania
             String htmlText = String.format("<html><b>%s</b><br><font size=\"-1\" color=\"gray\">Utworzono: %s</font></html>",
                     thread.topic, thread.createdAt);
             label.setText(htmlText);
@@ -373,11 +419,10 @@ public class Chat extends JPanel implements Refreshable {
                 label.setBackground(SIDEBAR_COLOR.brighter());
                 label.setForeground(Color.WHITE);
             } else {
-                // Naprzemienne kolory wierszy
                 if (index % 2 == 0) {
                     label.setBackground(Color.WHITE);
                 } else {
-                    label.setBackground(new Color(230, 230, 230)); // Jasnoszary
+                    label.setBackground(new Color(230, 230, 230));
                 }
                 label.setForeground(Color.BLACK);
             }
