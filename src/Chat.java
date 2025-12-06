@@ -7,7 +7,6 @@ import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-// Interfejs Refreshable musi być zaimplementowany w MainFrame
 public class Chat extends JPanel implements Refreshable {
 
     private final Connection dbConnection;
@@ -20,7 +19,6 @@ public class Chat extends JPanel implements Refreshable {
     private static final DateTimeFormatter DATE_FORMATTER =
             DateTimeFormatter.ofPattern("HH:mm:ss dd-MM-yyyy");
 
-    // UI
     private JList<ChatThread> threadsList;
     private DefaultListModel<ChatThread> threadsListModel;
     private JTextArea messageInput;
@@ -28,12 +26,10 @@ public class Chat extends JPanel implements Refreshable {
     private JPanel chatViewPanel;
     private JScrollPane chatScrollPane;
 
-    // aktualnie wybrany wątek
-    private int currentThreadId    = -1;
+    private int currentThreadId       = -1;
     private String currentThreadTopic = "Brak wybranej konwersacji";
     private int currentOtherWorkerId  = -1;
 
-    // Reprezentacja wątku (lewa lista)
     public static class ChatThread {
         public int id;
         public String topic;
@@ -62,17 +58,13 @@ public class Chat extends JPanel implements Refreshable {
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
         setBackground(new Color(240, 240, 240));
 
-        // 1. Nagłówek
         add(createHeader(), BorderLayout.NORTH);
 
-        // 2. Główna część (lewa: lista wątków, prawa: czat)
         JSplitPane splitPane = createMainContentPanel();
         add(splitPane, BorderLayout.CENTER);
 
-        // 3. Załaduj wątki
         loadThreadsList();
 
-        // Reakcja na wybór wątku
         threadsList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && threadsList.getSelectedValue() != null) {
                 ChatThread selected = threadsList.getSelectedValue();
@@ -86,11 +78,9 @@ public class Chat extends JPanel implements Refreshable {
             }
         });
 
-        // Reakcja na przycisk "Wyślij"
         sendButton.addActionListener(this::sendMessage);
     }
 
-    // ------------------- NAGŁÓWEK -------------------
     private JPanel createHeader() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setOpaque(false);
@@ -103,14 +93,11 @@ public class Chat extends JPanel implements Refreshable {
         return panel;
     }
 
-    // ------------------- GŁÓWNA ZAWARTOŚĆ -------------------
     private JSplitPane createMainContentPanel() {
-
-        // ---- LEWY PANEL: lista wątków ----
+        // LEWY PANEL – lista wątków
         JPanel threadsPanel = new JPanel(new BorderLayout());
         threadsPanel.setBorder(BorderFactory.createLineBorder(SIDEBAR_COLOR));
 
-        // nagłówek z przyciskiem "Nowa konwersacja"
         JPanel threadsHeader = new JPanel(new BorderLayout());
         threadsHeader.setBackground(Color.WHITE);
         threadsHeader.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
@@ -129,7 +116,6 @@ public class Chat extends JPanel implements Refreshable {
 
         threadsPanel.add(threadsHeader, BorderLayout.NORTH);
 
-        // lista wątków
         threadsListModel = new DefaultListModel<>();
         threadsList = new JList<>(threadsListModel);
         threadsList.setFont(new Font("Arial", Font.PLAIN, 14));
@@ -138,23 +124,23 @@ public class Chat extends JPanel implements Refreshable {
 
         threadsPanel.add(new JScrollPane(threadsList), BorderLayout.CENTER);
 
-        // ---- PRAWY PANEL: czat ----
+        // PRAWY PANEL – czat
         JPanel chatPanel = new JPanel(new BorderLayout());
         chatPanel.setBorder(BorderFactory.createLineBorder(SIDEBAR_COLOR));
 
-        // nagłówek czatu
         chatViewPanel = new JPanel(new BorderLayout());
         chatViewPanel.setBackground(new Color(245, 245, 245));
         chatViewPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
         chatPanel.add(chatViewPanel, BorderLayout.NORTH);
+        // UWAGA: tutaj sendButton jest jeszcze null, więc updateChatViewPanelTitle musi to obsłużyć
         updateChatViewPanelTitle();
 
-        // obszar wiadomości
         chatScrollPane = new JScrollPane();
         chatScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        chatScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        chatScrollPane.getVerticalScrollBar().setUnitIncrement(16);
         chatPanel.add(chatScrollPane, BorderLayout.CENTER);
 
-        // panel wejściowy
         JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
         inputPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
@@ -163,23 +149,20 @@ public class Chat extends JPanel implements Refreshable {
         messageInput.setWrapStyleWord(true);
         messageInput.setEnabled(false);
         JScrollPane inputScroll = new JScrollPane(messageInput);
+        inputPanel.add(inputScroll, BorderLayout.CENTER);
 
         sendButton = new JButton("Wyślij");
         sendButton.setEnabled(false);
-
-        inputPanel.add(inputScroll, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
 
         chatPanel.add(inputPanel, BorderLayout.SOUTH);
 
-        // ---- SPLITPANE ----
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, threadsPanel, chatPanel);
         split.setResizeWeight(0.3);
         split.setDividerLocation(350);
         return split;
     }
 
-    // ------------------- AKTUALIZACJA TYTUŁU CZATU -------------------
     private void updateChatViewPanelTitle() {
         chatViewPanel.removeAll();
         JLabel label = new JLabel("Konwersacja: " + currentThreadTopic, SwingConstants.CENTER);
@@ -189,11 +172,15 @@ public class Chat extends JPanel implements Refreshable {
         chatViewPanel.repaint();
 
         boolean enabled = currentThreadId != -1;
-        if (sendButton != null)   sendButton.setEnabled(enabled);
-        if (messageInput != null) messageInput.setEnabled(enabled);
+        // 🔥 NAPRAWA: null-checki, bo ta metoda jest wołana zanim przyciski powstaną
+        if (sendButton != null) {
+            sendButton.setEnabled(enabled);
+        }
+        if (messageInput != null) {
+            messageInput.setEnabled(enabled);
+        }
     }
 
-    // ------------------- NOWY WĄTEK -------------------
     private void showNewThreadDialog() {
         Window owner = SwingUtilities.getWindowAncestor(this);
         NewThreadDialog dialog = new NewThreadDialog(owner, dbConnection, loggedWorkerId, loggedWorkerUsername);
@@ -206,10 +193,9 @@ public class Chat extends JPanel implements Refreshable {
                 currentThreadTopic = newThread.topic;
                 currentOtherWorkerId = newThread.otherWorkerId;
 
-                // przeładuj listę, zaznacz nowy wątek
                 loadThreadsList();
                 for (int i = 0; i < threadsListModel.getSize(); i++) {
-                    if (threadsListModel.getElementAt(i).id == currentThreadId) {
+                    if (threadsListModel.get(i).id == currentThreadId) {
                         threadsList.setSelectedIndex(i);
                         break;
                     }
@@ -222,7 +208,6 @@ public class Chat extends JPanel implements Refreshable {
         }
     }
 
-    // ------------------- BAZA: WĄTKI -------------------
     private void loadThreadsList() {
         threadsListModel.clear();
 
@@ -230,10 +215,11 @@ public class Chat extends JPanel implements Refreshable {
             return;
         }
 
-        String sql = "SELECT id, topic, created_at, worker_id, worker_id2 " +
-                "FROM chat_threads " +
-                "WHERE worker_id = ? OR worker_id2 = ? " +
-                "ORDER BY created_at DESC";
+        String sql =
+                "SELECT id, topic, created_at, worker_id, worker_id2 " +
+                        "FROM chat_threads " +
+                        "WHERE worker_id = ? OR worker_id2 = ? " +
+                        "ORDER BY created_at DESC";
 
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
             pstmt.setInt(1, loggedWorkerId);
@@ -265,7 +251,6 @@ public class Chat extends JPanel implements Refreshable {
         }
     }
 
-    // ------------------- BAZA: WIADOMOŚCI -------------------
     private void loadChatMessages() {
         JPanel messagesContainer = new JPanel();
         messagesContainer.setLayout(new BoxLayout(messagesContainer, BoxLayout.Y_AXIS));
@@ -279,10 +264,11 @@ public class Chat extends JPanel implements Refreshable {
             return;
         }
 
-        String sql = "SELECT sender_type, sender_id, message, timestamp " +
-                "FROM chat_messages " +
-                "WHERE thread_id = ? " +
-                "ORDER BY timestamp ASC";
+        String sql =
+                "SELECT sender_type, sender_id, message, timestamp " +
+                        "FROM chat_messages " +
+                        "WHERE thread_id = ? " +
+                        "ORDER BY timestamp ASC";
 
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
             pstmt.setInt(1, currentThreadId);
@@ -298,7 +284,7 @@ public class Chat extends JPanel implements Refreshable {
                     messagesContainer.add(
                             createMessagePanel(msg, ts.format(DATE_FORMATTER), isOwn)
                     );
-                    messagesContainer.add(Box.createVerticalStrut(5));
+                    messagesContainer.add(Box.createVerticalStrut(4));
                 }
             }
         } catch (SQLException e) {
@@ -310,65 +296,73 @@ public class Chat extends JPanel implements Refreshable {
 
         chatScrollPane.setViewportView(messagesContainer);
 
-        // przewinięcie na dół
-        JScrollBar bar = chatScrollPane.getVerticalScrollBar();
-        SwingUtilities.invokeLater(() -> bar.setValue(bar.getMaximum()));
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar bar = chatScrollPane.getVerticalScrollBar();
+            bar.setValue(bar.getMaximum());
+        });
     }
 
-    // Tworzenie pojedynczego "dymka" wiadomości
-    private JPanel createMessagePanel(String message, String timestamp, boolean isOwnMessage) {
+    private JPanel createMessagePanel(String message, String timestamp, boolean isOwn) {
         JPanel wrapper = new JPanel();
         wrapper.setLayout(new BoxLayout(wrapper, BoxLayout.X_AXIS));
         wrapper.setOpaque(false);
 
-        JPanel bubble = new JPanel(new BorderLayout());
-        bubble.setBackground(isOwnMessage ? MESSAGE_BG_OWN : MESSAGE_BG_OTHER);
+        JPanel bubble = new JPanel(new BorderLayout()) {
+            @Override
+            public Dimension getMaximumSize() {
+                Dimension d = super.getPreferredSize();
+                int maxWidth = 420; // maks szerokość dymka
+                if (d.width > maxWidth) {
+                    d.width = maxWidth;
+                }
+                return d;
+            }
+        };
+
+        bubble.setBackground(isOwn ? MESSAGE_BG_OWN : MESSAGE_BG_OTHER);
         bubble.setBorder(BorderFactory.createCompoundBorder(
                 new EmptyBorder(5, 10, 5, 10),
-                BorderFactory.createLineBorder(isOwnMessage ? SIDEBAR_COLOR : Color.LIGHT_GRAY, 1)
+                BorderFactory.createLineBorder(isOwn ? SIDEBAR_COLOR : Color.GRAY, 1)
         ));
 
-        JTextArea msgArea = new JTextArea(message);
-        msgArea.setWrapStyleWord(true);
-        msgArea.setLineWrap(true);
-        msgArea.setEditable(false);
-        msgArea.setOpaque(false);
-        msgArea.setFont(new Font("Arial", Font.PLAIN, 14));
-        msgArea.setBorder(new EmptyBorder(0, 0, 5, 0));
+        JTextArea text = new JTextArea(message);
+        text.setEditable(false);
+        text.setOpaque(false);
+        text.setWrapStyleWord(true);
+        text.setLineWrap(true);
+        text.setFont(new Font("Arial", Font.PLAIN, 14));
+        text.setColumns(30);
 
-        JLabel timeLabel = new JLabel(timestamp,
-                isOwnMessage ? SwingConstants.RIGHT : SwingConstants.LEFT);
-        timeLabel.setFont(new Font("Arial", Font.ITALIC, 10));
-        timeLabel.setForeground(Color.GRAY);
+        JLabel time = new JLabel(timestamp);
+        time.setFont(new Font("Arial", Font.ITALIC, 10));
+        time.setForeground(Color.GRAY);
+        time.setHorizontalAlignment(SwingConstants.RIGHT);
 
-        bubble.add(msgArea, BorderLayout.CENTER);
-        bubble.add(timeLabel, BorderLayout.SOUTH);
+        bubble.add(text, BorderLayout.CENTER);
+        bubble.add(time, BorderLayout.SOUTH);
 
-        if (isOwnMessage) {
+        if (isOwn) {
             wrapper.add(Box.createHorizontalGlue());
             wrapper.add(bubble);
-            wrapper.add(Box.createHorizontalStrut(10));
-            wrapper.setAlignmentX(Component.RIGHT_ALIGNMENT);
         } else {
-            wrapper.add(Box.createHorizontalStrut(10));
             wrapper.add(bubble);
             wrapper.add(Box.createHorizontalGlue());
-            wrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
         }
 
+        wrapper.setBorder(new EmptyBorder(2, 10, 2, 10));
         return wrapper;
     }
 
-    // ------------------- WYSYŁANIE WIADOMOŚCI -------------------
     private void sendMessage(ActionEvent e) {
-        String msg = messageInput.getText().trim();
-        if (msg.isEmpty() || currentThreadId == -1) {
-            return;
-        }
+        if (currentThreadId == -1) return;
 
-        String sql = "INSERT INTO chat_messages " +
-                "(thread_id, sender_type, sender_id, message, timestamp) " +
-                "VALUES (?, 'worker', ?, ?, NOW())";
+        String msg = messageInput.getText().trim();
+        if (msg.isEmpty()) return;
+
+        String sql =
+                "INSERT INTO chat_messages " +
+                        "(thread_id, sender_type, sender_id, message, timestamp) " +
+                        "VALUES (?, 'worker', ?, ?, NOW())";
 
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
             pstmt.setInt(1, currentThreadId);
@@ -378,7 +372,6 @@ public class Chat extends JPanel implements Refreshable {
 
             messageInput.setText("");
             loadChatMessages();
-
         } catch (SQLException ex) {
             System.err.println("Błąd SQL podczas wysyłania wiadomości: " + ex.getMessage());
             JOptionPane.showMessageDialog(this,
@@ -387,7 +380,6 @@ public class Chat extends JPanel implements Refreshable {
         }
     }
 
-    // ------------------- AUTO-REFRESH -------------------
     @Override
     public void refreshData() {
         loadThreadsList();
@@ -396,7 +388,6 @@ public class Chat extends JPanel implements Refreshable {
         }
     }
 
-    // ------------------- RENDERER LISTY WĄTKÓW -------------------
     private static class ThreadListRenderer extends DefaultListCellRenderer {
         private final Border border = new EmptyBorder(5, 10, 5, 10);
 
@@ -408,23 +399,26 @@ public class Chat extends JPanel implements Refreshable {
             JLabel label = (JLabel) super.getListCellRendererComponent(
                     list, value, index, isSelected, cellHasFocus);
 
-            ChatThread thread = (ChatThread) value;
-            String text = String.format(
-                    "<html><b>%s</b><br><font size='-1' color='gray'>Utworzono: %s</font></html>",
-                    thread.topic, thread.createdAt
-            );
+            ChatThread t = (ChatThread) value;
+
+            String text =
+                    "<html><b>" + t.topic + "</b><br>" +
+                            "<font size='-1' color='gray'>" +
+                            t.createdAt + "</font></html>";
 
             label.setText(text);
             label.setBorder(border);
+            label.setOpaque(true);
 
             if (isSelected) {
                 label.setBackground(SIDEBAR_COLOR.brighter());
                 label.setForeground(Color.WHITE);
             } else {
                 label.setForeground(Color.BLACK);
-                label.setBackground(index % 2 == 0 ? Color.WHITE : new Color(230, 230, 230));
+                label.setBackground(
+                        index % 2 == 0 ? Color.WHITE : new Color(230, 230, 230)
+                );
             }
-
             return label;
         }
     }
