@@ -1,15 +1,11 @@
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
 
 // Interfejs Refreshable musi być zaimplementowany w MainFrame
 public class Chat extends JPanel implements Refreshable {
@@ -17,11 +13,14 @@ public class Chat extends JPanel implements Refreshable {
     private final Connection dbConnection;
     private final int loggedWorkerId;
     private final String loggedWorkerUsername;
-    private static final Color SIDEBAR_COLOR = new Color(87, 50, 135);
-    private static final Color MESSAGE_BG_OWN = new Color(175, 238, 238); // Jasny błękit/cyjan dla własnych wiadomości
-    private static final Color MESSAGE_BG_OTHER = new Color(240, 240, 240); // Jasny szary dla innych wiadomości
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss dd-MM-yyyy");
 
+    private static final Color SIDEBAR_COLOR    = new Color(87, 50, 135);
+    private static final Color MESSAGE_BG_OWN   = new Color(175, 238, 238);
+    private static final Color MESSAGE_BG_OTHER = new Color(240, 240, 240);
+    private static final DateTimeFormatter DATE_FORMATTER =
+            DateTimeFormatter.ofPattern("HH:mm:ss dd-MM-yyyy");
+
+    // UI
     private JList<ChatThread> threadsList;
     private DefaultListModel<ChatThread> threadsListModel;
     private JTextArea messageInput;
@@ -29,19 +28,23 @@ public class Chat extends JPanel implements Refreshable {
     private JPanel chatViewPanel;
     private JScrollPane chatScrollPane;
 
-    private int currentThreadId = -1;
+    // aktualnie wybrany wątek
+    private int currentThreadId    = -1;
     private String currentThreadTopic = "Brak wybranej konwersacji";
+    private int currentOtherWorkerId  = -1;
 
-    // ZMIANA TUTAJ: Klasa musi być publiczna, aby NewThreadDialog mogło jej użyć.
+    // Reprezentacja wątku (lewa lista)
     public static class ChatThread {
-        int id;
-        String topic;
-        String createdAt;
+        public int id;
+        public String topic;
+        public String createdAt;
+        public int otherWorkerId;
 
-        public ChatThread(int id, String topic, String createdAt) {
+        public ChatThread(int id, String topic, String createdAt, int otherWorkerId) {
             this.id = id;
             this.topic = topic;
             this.createdAt = createdAt;
+            this.otherWorkerId = otherWorkerId;
         }
 
         @Override
@@ -62,74 +65,71 @@ public class Chat extends JPanel implements Refreshable {
         // 1. Nagłówek
         add(createHeader(), BorderLayout.NORTH);
 
-        // 2. Główny kontener - podział na listę wątków i widok czatu
-        JSplitPane mainSplitPane = createMainContentPanel();
-        add(mainSplitPane, BorderLayout.CENTER);
+        // 2. Główna część (lewa: lista wątków, prawa: czat)
+        JSplitPane splitPane = createMainContentPanel();
+        add(splitPane, BorderLayout.CENTER);
 
-        // 3. Uruchomienie ładowania danych
+        // 3. Załaduj wątki
         loadThreadsList();
 
-        // Listener wyboru wątku
+        // Reakcja na wybór wątku
         threadsList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && threadsList.getSelectedValue() != null) {
-                ChatThread selectedThread = threadsList.getSelectedValue();
-                if (selectedThread.id != currentThreadId) {
-                    currentThreadId = selectedThread.id;
-                    currentThreadTopic = selectedThread.topic;
+                ChatThread selected = threadsList.getSelectedValue();
+                if (selected.id != currentThreadId) {
+                    currentThreadId = selected.id;
+                    currentThreadTopic = selected.topic;
+                    currentOtherWorkerId = selected.otherWorkerId;
                     updateChatViewPanelTitle();
                     loadChatMessages();
                 }
             }
         });
 
-        // Listener przycisku Wyslij
+        // Reakcja na przycisk "Wyślij"
         sendButton.addActionListener(this::sendMessage);
     }
 
-    // Metoda tworząca nagłówek panelu
+    // ------------------- NAGŁÓWEK -------------------
     private JPanel createHeader() {
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setOpaque(false);
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setOpaque(false);
 
-        JLabel titleLabel = new JLabel("Centrum Komunikacji (Czat)", SwingConstants.CENTER);
+        JLabel titleLabel = new JLabel("Centrum komunikacji (czat)", SwingConstants.CENTER);
         titleLabel.setFont(new Font("Arial", Font.BOLD, 28));
         titleLabel.setForeground(SIDEBAR_COLOR);
 
-        headerPanel.add(titleLabel, BorderLayout.CENTER);
-
-        return headerPanel;
+        panel.add(titleLabel, BorderLayout.CENTER);
+        return panel;
     }
 
-    // Metoda tworząca główną zawartość (zawiera przycisk "Nowa konwersacja")
+    // ------------------- GŁÓWNA ZAWARTOŚĆ -------------------
     private JSplitPane createMainContentPanel() {
 
-        // --- Lewy panel: Historia rozmów (threadsPanel) ---
+        // ---- LEWY PANEL: lista wątków ----
         JPanel threadsPanel = new JPanel(new BorderLayout());
         threadsPanel.setBorder(BorderFactory.createLineBorder(SIDEBAR_COLOR));
 
-        // NOWA SEKCJA: Nagłówek dla listy wątków (zawierający przycisk "Nowa konwersacja")
-        JPanel threadsHeaderPanel = new JPanel(new BorderLayout());
-        threadsHeaderPanel.setBackground(Color.WHITE);
-        threadsHeaderPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Marginesy
+        // nagłówek z przyciskiem "Nowa konwersacja"
+        JPanel threadsHeader = new JPanel(new BorderLayout());
+        threadsHeader.setBackground(Color.WHITE);
+        threadsHeader.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
-        // Tytuł listy
         JLabel threadsTitle = new JLabel("Historia rozmów");
         threadsTitle.setFont(new Font("Arial", Font.BOLD, 16));
         threadsTitle.setForeground(SIDEBAR_COLOR);
-        threadsHeaderPanel.add(threadsTitle, BorderLayout.WEST);
+        threadsHeader.add(threadsTitle, BorderLayout.WEST);
 
-        // Przycisk "Nowa konwersacja"
-        JButton newConversationButton = new JButton("Nowa konwersacja");
-        newConversationButton.setFont(new Font("Arial", Font.PLAIN, 12));
-        newConversationButton.setBackground(new Color(150, 150, 250));
-        newConversationButton.setForeground(Color.WHITE);
-        newConversationButton.addActionListener(e -> showNewThreadDialog());
+        JButton newThreadButton = new JButton("Nowa konwersacja");
+        newThreadButton.setFont(new Font("Arial", Font.PLAIN, 12));
+        newThreadButton.setBackground(new Color(150, 150, 250));
+        newThreadButton.setForeground(Color.WHITE);
+        newThreadButton.addActionListener(e -> showNewThreadDialog());
+        threadsHeader.add(newThreadButton, BorderLayout.EAST);
 
-        threadsHeaderPanel.add(newConversationButton, BorderLayout.EAST);
+        threadsPanel.add(threadsHeader, BorderLayout.NORTH);
 
-        threadsPanel.add(threadsHeaderPanel, BorderLayout.NORTH); // Dodanie nagłówka na górę
-
-        // Inicjalizacja listy wątków
+        // lista wątków
         threadsListModel = new DefaultListModel<>();
         threadsList = new JList<>(threadsListModel);
         threadsList.setFont(new Font("Arial", Font.PLAIN, 14));
@@ -138,83 +138,65 @@ public class Chat extends JPanel implements Refreshable {
 
         threadsPanel.add(new JScrollPane(threadsList), BorderLayout.CENTER);
 
-        // --- Prawy panel: Widok Czatu (chatPanel) ---
+        // ---- PRAWY PANEL: czat ----
         JPanel chatPanel = new JPanel(new BorderLayout());
         chatPanel.setBorder(BorderFactory.createLineBorder(SIDEBAR_COLOR));
 
-        // Panel na nagłówek czatu (wybrany topic)
+        // nagłówek czatu
         chatViewPanel = new JPanel(new BorderLayout());
-        chatViewPanel.setBackground(Color.LIGHT_GRAY);
+        chatViewPanel.setBackground(new Color(245, 245, 245));
         chatViewPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
         chatPanel.add(chatViewPanel, BorderLayout.NORTH);
+        updateChatViewPanelTitle();
 
-        // Obszar na wiadomości
+        // obszar wiadomości
         chatScrollPane = new JScrollPane();
         chatScrollPane.setBorder(BorderFactory.createEmptyBorder());
         chatPanel.add(chatScrollPane, BorderLayout.CENTER);
 
-        // Panel do wpisywania wiadomości
-        JPanel inputPanel = createInputPanel(); // inicjalizuje messageInput i sendButton
-        chatPanel.add(inputPanel, BorderLayout.SOUTH);
-
-        // PRAWIDŁOWE MIEJSCE: Wywołanie aktualizacji panelu po zainicjalizowaniu wszystkich komponentów
-        updateChatViewPanelTitle();
-
-        // Używamy JSplitPane do podziału
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, threadsPanel, chatPanel);
-        splitPane.setResizeWeight(0.3); // 30% dla listy wątków
-        splitPane.setDividerSize(5);
-
-        return splitPane;
-    }
-
-    // Metoda tworząca panel wprowadzania wiadomości
-    private JPanel createInputPanel() {
+        // panel wejściowy
         JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
         inputPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
 
-        messageInput = new JTextArea(3, 20);
-        messageInput.setWrapStyleWord(true);
+        messageInput = new JTextArea(3, 30);
         messageInput.setLineWrap(true);
-        messageInput.setFont(new Font("Arial", Font.PLAIN, 14));
-        JScrollPane inputScrollPane = new JScrollPane(messageInput);
+        messageInput.setWrapStyleWord(true);
+        messageInput.setEnabled(false);
+        JScrollPane inputScroll = new JScrollPane(messageInput);
 
         sendButton = new JButton("Wyślij");
-        sendButton.setBackground(SIDEBAR_COLOR);
-        sendButton.setForeground(Color.WHITE);
-        sendButton.setFont(new Font("Arial", Font.BOLD, 14));
+        sendButton.setEnabled(false);
 
-        inputPanel.add(inputScrollPane, BorderLayout.CENTER);
+        inputPanel.add(inputScroll, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
 
-        return inputPanel;
+        chatPanel.add(inputPanel, BorderLayout.SOUTH);
+
+        // ---- SPLITPANE ----
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, threadsPanel, chatPanel);
+        split.setResizeWeight(0.3);
+        split.setDividerLocation(350);
+        return split;
     }
 
-    // Metoda aktualizująca tytuł głównego okna czatu
+    // ------------------- AKTUALIZACJA TYTUŁU CZATU -------------------
     private void updateChatViewPanelTitle() {
         chatViewPanel.removeAll();
-        JLabel titleLabel = new JLabel("Konwersacja: " + currentThreadTopic, SwingConstants.CENTER);
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        chatViewPanel.add(titleLabel, BorderLayout.CENTER);
+        JLabel label = new JLabel("Konwersacja: " + currentThreadTopic, SwingConstants.CENTER);
+        label.setFont(new Font("Arial", Font.BOLD, 16));
+        chatViewPanel.add(label, BorderLayout.CENTER);
         chatViewPanel.revalidate();
         chatViewPanel.repaint();
 
-        if (sendButton != null) {
-            sendButton.setEnabled(currentThreadId != -1);
-        }
-        if (messageInput != null) {
-            messageInput.setEnabled(currentThreadId != -1);
-        }
+        boolean enabled = currentThreadId != -1;
+        if (sendButton != null)   sendButton.setEnabled(enabled);
+        if (messageInput != null) messageInput.setEnabled(enabled);
     }
 
-    // NOWA METODA: Pokazuje okno dialogowe do tworzenia nowego wątku
+    // ------------------- NOWY WĄTEK -------------------
     private void showNewThreadDialog() {
-        NewThreadDialog dialog = new NewThreadDialog(
-                SwingUtilities.getWindowAncestor(this),
-                dbConnection,
-                loggedWorkerId,
-                loggedWorkerUsername
-        );
+        Window owner = SwingUtilities.getWindowAncestor(this);
+        NewThreadDialog dialog = new NewThreadDialog(owner, dbConnection, loggedWorkerId, loggedWorkerUsername);
         dialog.setVisible(true);
 
         if (dialog.isThreadCreated()) {
@@ -222,9 +204,10 @@ public class Chat extends JPanel implements Refreshable {
             if (newThread != null) {
                 currentThreadId = newThread.id;
                 currentThreadTopic = newThread.topic;
+                currentOtherWorkerId = newThread.otherWorkerId;
 
+                // przeładuj listę, zaznacz nowy wątek
                 loadThreadsList();
-
                 for (int i = 0; i < threadsListModel.getSize(); i++) {
                     if (threadsListModel.getElementAt(i).id == currentThreadId) {
                         threadsList.setSelectedIndex(i);
@@ -239,192 +222,207 @@ public class Chat extends JPanel implements Refreshable {
         }
     }
 
-
-    // ----------------------------------------------------------------------
-    // LOGIKA BAZY DANYCH
-    // ----------------------------------------------------------------------
-
-    // 1. Ładowanie listy wątków (Historia rozmów)
+    // ------------------- BAZA: WĄTKI -------------------
     private void loadThreadsList() {
         threadsListModel.clear();
-        String sql = "SELECT id, topic, created_at FROM chat_threads WHERE worker_id = ? ORDER BY created_at DESC";
+
+        if (dbConnection == null) {
+            return;
+        }
+
+        String sql = "SELECT id, topic, created_at, worker_id, worker_id2 " +
+                "FROM chat_threads " +
+                "WHERE worker_id = ? OR worker_id2 = ? " +
+                "ORDER BY created_at DESC";
 
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
             pstmt.setInt(1, loggedWorkerId);
+            pstmt.setInt(2, loggedWorkerId);
+
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    threadsListModel.addElement(new ChatThread(
-                            rs.getInt("id"),
-                            rs.getString("topic"),
-                            rs.getTimestamp("created_at").toLocalDateTime().format(DATE_FORMATTER)
-                    ));
-                }
+                    int id = rs.getInt("id");
+                    String topic = rs.getString("topic");
+                    Timestamp ts = rs.getTimestamp("created_at");
+                    String createdAt = ts != null
+                            ? ts.toLocalDateTime().format(DATE_FORMATTER)
+                            : "";
 
-                if (currentThreadId != -1 && threadsListModel.getSize() > 0) {
-                    for (int i = 0; i < threadsListModel.getSize(); i++) {
-                        if (threadsListModel.getElementAt(i).id == currentThreadId) {
-                            threadsList.setSelectedIndex(i);
-                            break;
-                        }
-                    }
-                }
+                    int w1 = rs.getInt("worker_id");
+                    int w2 = rs.getInt("worker_id2");
+                    int other = (w1 == loggedWorkerId) ? w2 : w1;
 
+                    threadsListModel.addElement(
+                            new ChatThread(id, topic, createdAt, other)
+                    );
+                }
             }
         } catch (SQLException e) {
             System.err.println("Błąd SQL podczas ładowania listy wątków: " + e.getMessage());
+            JOptionPane.showMessageDialog(this,
+                    "Błąd podczas wczytywania listy rozmów:\n" + e.getMessage(),
+                    "Błąd", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // 2. Ładowanie wiadomości dla wybranego wątku
+    // ------------------- BAZA: WIADOMOŚCI -------------------
     private void loadChatMessages() {
-        if (currentThreadId == -1) return;
-
         JPanel messagesContainer = new JPanel();
         messagesContainer.setLayout(new BoxLayout(messagesContainer, BoxLayout.Y_AXIS));
         messagesContainer.setBackground(Color.WHITE);
 
-        String sql = "SELECT sender_type, sender_id, message, timestamp FROM chat_messages WHERE thread_id = ? ORDER BY timestamp ASC";
+        if (currentThreadId == -1) {
+            JLabel info = new JLabel("Wybierz konwersację z listy po lewej.", SwingConstants.CENTER);
+            info.setBorder(new EmptyBorder(20, 10, 20, 10));
+            messagesContainer.add(info);
+            chatScrollPane.setViewportView(messagesContainer);
+            return;
+        }
+
+        String sql = "SELECT sender_type, sender_id, message, timestamp " +
+                "FROM chat_messages " +
+                "WHERE thread_id = ? " +
+                "ORDER BY timestamp ASC";
 
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
             pstmt.setInt(1, currentThreadId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     String senderType = rs.getString("sender_type");
-                    int senderId = rs.getInt("sender_id");
-                    String message = rs.getString("message");
-                    LocalDateTime timestamp = rs.getTimestamp("timestamp").toLocalDateTime();
+                    int senderId      = rs.getInt("sender_id");
+                    String msg        = rs.getString("message");
+                    LocalDateTime ts  = rs.getTimestamp("timestamp").toLocalDateTime();
 
-                    boolean isOwnMessage = senderType.equals("worker") && senderId == loggedWorkerId;
+                    boolean isOwn = "worker".equals(senderType) && senderId == loggedWorkerId;
 
-                    messagesContainer.add(createMessagePanel(
-                            message,
-                            timestamp.format(DATE_FORMATTER),
-                            isOwnMessage
-                    ));
+                    messagesContainer.add(
+                            createMessagePanel(msg, ts.format(DATE_FORMATTER), isOwn)
+                    );
                     messagesContainer.add(Box.createVerticalStrut(5));
                 }
             }
         } catch (SQLException e) {
             System.err.println("Błąd SQL podczas ładowania wiadomości: " + e.getMessage());
+            JOptionPane.showMessageDialog(this,
+                    "Błąd podczas wczytywania wiadomości:\n" + e.getMessage(),
+                    "Błąd", JOptionPane.ERROR_MESSAGE);
         }
 
         chatScrollPane.setViewportView(messagesContainer);
 
-        JScrollBar verticalScrollBar = chatScrollPane.getVerticalScrollBar();
-        SwingUtilities.invokeLater(() -> verticalScrollBar.setValue(verticalScrollBar.getMaximum()));
+        // przewinięcie na dół
+        JScrollBar bar = chatScrollPane.getVerticalScrollBar();
+        SwingUtilities.invokeLater(() -> bar.setValue(bar.getMaximum()));
     }
 
-    // Metoda do tworzenia panelu pojedynczej wiadomości
+    // Tworzenie pojedynczego "dymka" wiadomości
     private JPanel createMessagePanel(String message, String timestamp, boolean isOwnMessage) {
-        JPanel messageWrapper = new JPanel();
-        messageWrapper.setLayout(new BoxLayout(messageWrapper, BoxLayout.X_AXIS));
-        messageWrapper.setOpaque(false);
+        JPanel wrapper = new JPanel();
+        wrapper.setLayout(new BoxLayout(wrapper, BoxLayout.X_AXIS));
+        wrapper.setOpaque(false);
 
-        JPanel messageContent = new JPanel(new BorderLayout());
-        messageContent.setBackground(isOwnMessage ? MESSAGE_BG_OWN : MESSAGE_BG_OTHER);
-        messageContent.setBorder(BorderFactory.createCompoundBorder(
+        JPanel bubble = new JPanel(new BorderLayout());
+        bubble.setBackground(isOwnMessage ? MESSAGE_BG_OWN : MESSAGE_BG_OTHER);
+        bubble.setBorder(BorderFactory.createCompoundBorder(
                 new EmptyBorder(5, 10, 5, 10),
                 BorderFactory.createLineBorder(isOwnMessage ? SIDEBAR_COLOR : Color.LIGHT_GRAY, 1)
         ));
 
-        messageContent.setMaximumSize(messageContent.getPreferredSize());
+        JTextArea msgArea = new JTextArea(message);
+        msgArea.setWrapStyleWord(true);
+        msgArea.setLineWrap(true);
+        msgArea.setEditable(false);
+        msgArea.setOpaque(false);
+        msgArea.setFont(new Font("Arial", Font.PLAIN, 14));
+        msgArea.setBorder(new EmptyBorder(0, 0, 5, 0));
 
+        JLabel timeLabel = new JLabel(timestamp,
+                isOwnMessage ? SwingConstants.RIGHT : SwingConstants.LEFT);
+        timeLabel.setFont(new Font("Arial", Font.ITALIC, 10));
+        timeLabel.setForeground(Color.GRAY);
 
-        JTextArea messageArea = new JTextArea(message);
-        messageArea.setWrapStyleWord(true);
-        messageArea.setLineWrap(true);
-        messageArea.setEditable(false);
-        messageArea.setOpaque(false);
-        messageArea.setFont(new Font("Arial", Font.PLAIN, 14));
-        messageArea.setForeground(Color.BLACK);
-        messageArea.setBorder(new EmptyBorder(0, 0, 5, 0));
-
-        JLabel timestampLabel = new JLabel(timestamp, isOwnMessage ? SwingConstants.RIGHT : SwingConstants.LEFT);
-        timestampLabel.setFont(new Font("Arial", Font.ITALIC, 10));
-        timestampLabel.setForeground(Color.GRAY);
-
-        messageContent.add(messageArea, BorderLayout.CENTER);
-        messageContent.add(timestampLabel, BorderLayout.SOUTH);
+        bubble.add(msgArea, BorderLayout.CENTER);
+        bubble.add(timeLabel, BorderLayout.SOUTH);
 
         if (isOwnMessage) {
-            messageWrapper.add(Box.createHorizontalGlue());
-            messageWrapper.add(messageContent);
-            messageWrapper.add(Box.createHorizontalStrut(10));
-            messageWrapper.setAlignmentX(Component.RIGHT_ALIGNMENT);
+            wrapper.add(Box.createHorizontalGlue());
+            wrapper.add(bubble);
+            wrapper.add(Box.createHorizontalStrut(10));
+            wrapper.setAlignmentX(Component.RIGHT_ALIGNMENT);
         } else {
-            messageWrapper.add(Box.createHorizontalStrut(10));
-            messageWrapper.add(messageContent);
-            messageWrapper.add(Box.createHorizontalGlue());
-            messageWrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
+            wrapper.add(Box.createHorizontalStrut(10));
+            wrapper.add(bubble);
+            wrapper.add(Box.createHorizontalGlue());
+            wrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
         }
 
-        return messageWrapper;
+        return wrapper;
     }
 
-    // 3. Wysyłanie wiadomości
+    // ------------------- WYSYŁANIE WIADOMOŚCI -------------------
     private void sendMessage(ActionEvent e) {
-        String message = messageInput.getText().trim();
-
-        if (message.isEmpty() || currentThreadId == -1) {
+        String msg = messageInput.getText().trim();
+        if (msg.isEmpty() || currentThreadId == -1) {
             return;
         }
 
-        String sql = "INSERT INTO chat_messages (thread_id, sender_type, sender_id, message, timestamp) VALUES (?, 'worker', ?, ?, NOW())";
+        String sql = "INSERT INTO chat_messages " +
+                "(thread_id, sender_type, sender_id, message, timestamp) " +
+                "VALUES (?, 'worker', ?, ?, NOW())";
 
         try (PreparedStatement pstmt = dbConnection.prepareStatement(sql)) {
             pstmt.setInt(1, currentThreadId);
             pstmt.setInt(2, loggedWorkerId);
-            pstmt.setString(3, message);
-
+            pstmt.setString(3, msg);
             pstmt.executeUpdate();
 
             messageInput.setText("");
-
             loadChatMessages();
 
         } catch (SQLException ex) {
             System.err.println("Błąd SQL podczas wysyłania wiadomości: " + ex.getMessage());
-            JOptionPane.showMessageDialog(this, "Błąd podczas wysyłania wiadomości.", "Błąd", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Błąd podczas wysyłania wiadomości:\n" + ex.getMessage(),
+                    "Błąd", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    // 4. Implementacja automatycznego odświeżania (wywoływana co 3 sekundy)
+    // ------------------- AUTO-REFRESH -------------------
     @Override
     public void refreshData() {
         loadThreadsList();
-
         if (currentThreadId != -1) {
             loadChatMessages();
         }
     }
 
-    // ----------------------------------------------------------------------
-    // KLASA WEWNĘTRZNA – Niestandardowy Renderer dla listy wątków
-    // ----------------------------------------------------------------------
-    private class ThreadListRenderer extends DefaultListCellRenderer {
+    // ------------------- RENDERER LISTY WĄTKÓW -------------------
+    private static class ThreadListRenderer extends DefaultListCellRenderer {
         private final Border border = new EmptyBorder(5, 10, 5, 10);
 
         @Override
-        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+        public Component getListCellRendererComponent(
+                JList<?> list, Object value, int index,
+                boolean isSelected, boolean cellHasFocus) {
+
+            JLabel label = (JLabel) super.getListCellRendererComponent(
+                    list, value, index, isSelected, cellHasFocus);
 
             ChatThread thread = (ChatThread) value;
+            String text = String.format(
+                    "<html><b>%s</b><br><font size='-1' color='gray'>Utworzono: %s</font></html>",
+                    thread.topic, thread.createdAt
+            );
 
-            String htmlText = String.format("<html><b>%s</b><br><font size=\"-1\" color=\"gray\">Utworzono: %s</font></html>",
-                    thread.topic, thread.createdAt);
-            label.setText(htmlText);
+            label.setText(text);
             label.setBorder(border);
 
             if (isSelected) {
                 label.setBackground(SIDEBAR_COLOR.brighter());
                 label.setForeground(Color.WHITE);
             } else {
-                if (index % 2 == 0) {
-                    label.setBackground(Color.WHITE);
-                } else {
-                    label.setBackground(new Color(230, 230, 230));
-                }
                 label.setForeground(Color.BLACK);
+                label.setBackground(index % 2 == 0 ? Color.WHITE : new Color(230, 230, 230));
             }
 
             return label;
